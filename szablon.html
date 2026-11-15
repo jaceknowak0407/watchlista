@@ -1,0 +1,319 @@
+<!doctype html>
+<!--
+  Szablon strony watchlisty. Skrypt watchlista.py wstawia dane w miejsce __DANE__
+  i zapisuje gotową stronę (np. _site/index.html). Tu zmieniasz tylko wygląd.
+-->
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Watchlista">
+<title>Watchlista</title>
+<style>
+  :root {
+    --tlo: #f3f4f7;
+    --karta: #ffffff;
+    --tekst: #14161c;
+    --szary: #6b7080;
+    --linia: #e4e6ec;
+    --akcent: #2563eb;
+    --akcent-tlo: rgba(37, 99, 235, .12);
+    --czerwony: #c81e2c;
+    --czerwony-tlo: #fde8ea;
+    --zolty: #946200;
+    --zolty-tlo: #fff3d1;
+    --ok: #4b5263;
+    --ok-tlo: #eceef3;
+    --cien: 0 1px 3px rgba(20, 22, 28, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tlo: #0e0f13;
+      --karta: #1a1c22;
+      --tekst: #eceef3;
+      --szary: #9aa0ae;
+      --linia: #2b2e37;
+      --akcent: #6aa1ff;
+      --akcent-tlo: rgba(106, 161, 255, .16);
+      --czerwony: #ff7b84;
+      --czerwony-tlo: rgba(255, 123, 132, .14);
+      --zolty: #f2c14e;
+      --zolty-tlo: rgba(242, 193, 78, .14);
+      --ok: #c3c8d4;
+      --ok-tlo: rgba(195, 200, 212, .12);
+      --cien: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 12px 40px; background: var(--tlo); color: var(--tekst);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .liczby { font-variant-numeric: tabular-nums; }
+  main { max-width: 980px; margin: 0 auto; }
+
+  /* Nagłówek */
+  h1 { font-size: 24px; margin: 0; letter-spacing: -.01em; }
+  .podtytul { color: var(--szary); font-size: 13px; margin: 2px 0 12px; }
+  .podsumowanie { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+    border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+  /* Kolory statusu (spadek od szczytu) */
+  .czerwony { --kolor: var(--czerwony); --kolor-tlo: var(--czerwony-tlo); }
+  .zolty    { --kolor: var(--zolty);    --kolor-tlo: var(--zolty-tlo); }
+  .ok       { --kolor: var(--ok);       --kolor-tlo: var(--ok-tlo); }
+  .chip { color: var(--kolor); background: var(--kolor-tlo); }
+
+  /* Karty spółek */
+  .lista { display: grid; gap: 10px; grid-template-columns: 1fr; }
+  @media (min-width: 700px) { .lista { grid-template-columns: 1fr 1fr; } }
+  .karta {
+    all: unset; box-sizing: border-box; display: block; cursor: pointer;
+    background: var(--karta); border-radius: 14px; padding: 12px 14px 12px 16px;
+    box-shadow: var(--cien); border-left: 5px solid var(--kolor);
+  }
+  .karta:focus-visible { outline: 2px solid var(--akcent); outline-offset: 2px; }
+  .karta:active { transform: scale(.99); }
+  .gora { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .nazwa { font-weight: 700; font-size: 16px; }
+  .nazwa .ikona { color: var(--akcent); font-size: 13px; margin-left: 4px; }
+  .ticker {
+    display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 6px;
+    background: var(--akcent-tlo); color: var(--akcent); font-size: 12px; font-weight: 700;
+  }
+  .odznaka { text-align: right; flex-shrink: 0; }
+  .odznaka b {
+    display: inline-block; padding: 3px 9px; border-radius: 8px; font-size: 16px;
+    color: var(--kolor); background: var(--kolor-tlo);
+  }
+  .odznaka small { display: block; color: var(--szary); font-size: 11px; margin-top: 3px; }
+  .cena { margin: 10px 0 6px; font-size: 22px; font-weight: 700; }
+  .cena span { font-size: 13px; color: var(--szary); font-weight: 600; margin-left: 4px; }
+  .pasek { height: 6px; border-radius: 3px; background: var(--linia); overflow: hidden; }
+  .pasek i { display: block; height: 100%; border-radius: 3px; background: var(--kolor); }
+  .szczyty { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .szczyty div { font-size: 12px; color: var(--szary); }
+  .szczyty strong { display: block; font-size: 14px; color: var(--tekst); }
+  .szczyty .procent { font-weight: 700; color: var(--kolor); }
+
+  /* Okienko z wykresem */
+  dialog {
+    width: min(640px, calc(100vw - 20px)); max-width: none; padding: 0; border: 0;
+    border-radius: 16px; background: var(--karta); color: var(--tekst);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .55); }
+  .okno { padding: 16px; }
+  .okno-gora { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .okno h2 { margin: 0; font-size: 18px; }
+  .zamknij {
+    all: unset; cursor: pointer; width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center; background: var(--ok-tlo); font-size: 20px; line-height: 1;
+  }
+  .okno-info { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 4px; font-size: 13px; color: var(--szary); }
+  .okno-info strong { color: var(--tekst); }
+  #wykres { position: relative; margin-top: 8px; touch-action: none; }
+  #wykres svg { display: block; width: 100%; }
+  #wykres text { font-size: 11px; fill: var(--szary); }
+  #dymek {
+    position: absolute; top: 0; pointer-events: none; display: none; white-space: nowrap;
+    background: var(--tekst); color: var(--karta); padding: 5px 8px; border-radius: 8px; font-size: 12px;
+  }
+  .stopka { color: var(--szary); font-size: 12px; margin-top: 18px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Watchlista</h1>
+  <div class="podtytul" id="podtytul"></div>
+  <div class="podsumowanie" id="podsumowanie"></div>
+  <div class="lista" id="lista"></div>
+  <div class="stopka">Dotknij spółki, aby zobaczyć wykres. Pasek = obecna cena jako część szczytu z ostatnich dni (pełny pasek = na szczycie).<br> Dane: Yahoo Finance (ceny zamknięcia).</div>
+</main>
+
+<dialog id="okno">
+  <div class="okno">
+    <div class="okno-gora">
+      <div>
+        <h2 id="okno-nazwa"></h2>
+        <span class="ticker" id="okno-ticker"></span>
+      </div>
+      <button class="zamknij" id="zamknij" aria-label="Zamknij">×</button>
+    </div>
+    <div class="okno-info liczby" id="okno-info"></div>
+    <div id="wykres"><div id="dymek" class="liczby"></div></div>
+  </div>
+</dialog>
+
+<script>
+const DANE = __DANE__;
+
+// ---------- pomocnicze ----------
+function kwota(x) {
+  const miejsca = x >= 1000 ? 0 : 2;
+  return x.toLocaleString("pl-PL", { minimumFractionDigits: miejsca, maximumFractionDigits: miejsca });
+}
+function procent(x) {
+  const t = Math.abs(x).toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (x > 0.05 ? "+" : x < -0.05 ? "−" : "") + t + "%";
+}
+function status(x) {
+  if (x < -DANE.prog_czerwony) return "czerwony";
+  if (x < -DANE.prog_zolty) return "zolty";
+  return "ok";
+}
+function dataPL(iso) {            // "2026-11-14" -> "14.11.2026"
+  const [r, m, d] = iso.split("-");
+  return d + "." + m + "." + r;
+}
+function esc(t) {
+  return String(t).replace(/[&<>"]/g, z => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[z]));
+}
+
+// ---------- nagłówek ----------
+document.getElementById("podtytul").textContent =
+  "Aktualizacja: " + DANE.aktualizacja + " · szczyt lokalny = ostatnie " + DANE.dni + " dni";
+
+const ile = { czerwony: 0, zolty: 0, ok: 0 };
+DANE.spolki.forEach(s => ile[status(s.od_lokalnego)]++);
+document.getElementById("podsumowanie").innerHTML =
+  '<span class="chip czerwony">' + ile.czerwony + " · spadek &gt; " + DANE.prog_czerwony + "%</span>" +
+  '<span class="chip zolty">' + ile.zolty + " · spadek &gt; " + DANE.prog_zolty + "%</span>" +
+  '<span class="chip ok">' + ile.ok + " · blisko szczytu</span>";
+
+// ---------- karty ----------
+const lista = document.getElementById("lista");
+DANE.spolki.forEach((s, i) => {
+  const st = status(s.od_lokalnego);
+  const stAth = status(s.od_ath);
+  const wypelnienie = Math.max(0, Math.min(100, (s.cena / s.szczyt) * 100));
+  const karta = document.createElement("button");
+  karta.className = "karta " + st;
+  karta.innerHTML =
+    '<div class="gora">' +
+      "<div>" +
+        '<div class="nazwa">' + esc(s.nazwa) + '<span class="ikona">📈</span></div>' +
+        '<span class="ticker">' + esc(s.ticker) + "</span>" +
+      "</div>" +
+      '<div class="odznaka liczby"><b>' + procent(s.od_lokalnego) + "</b><small>od szczytu " + DANE.dni + "d</small></div>" +
+    "</div>" +
+    '<div class="cena liczby">' + kwota(s.cena) + "<span>" + esc(s.waluta) + "</span></div>" +
+    '<div class="pasek" title="cena jako % szczytu ' + DANE.dni + 'd"><i style="width:' + wypelnienie + '%"></i></div>' +
+    '<div class="szczyty liczby">' +
+      "<div>Szczyt " + DANE.dni + "d<strong>" + kwota(s.szczyt) + " " + esc(s.waluta) + "</strong>" + s.data_szczytu + "</div>" +
+      '<div class="' + stAth + '">ATH <span class="procent">' + procent(s.od_ath) + "</span><strong>" +
+        kwota(s.ath) + " " + esc(s.waluta) + "</strong>" + s.data_ath + "</div>" +
+    "</div>";
+  karta.addEventListener("click", () => otworz(i));
+  lista.appendChild(karta);
+});
+
+// ---------- okienko z wykresem ----------
+const okno = document.getElementById("okno");
+let otwarta = null;
+
+function otworz(i) {
+  const s = DANE.spolki[i];
+  otwarta = s;
+  document.getElementById("okno-nazwa").textContent = s.nazwa;
+  document.getElementById("okno-ticker").textContent = s.ticker;
+  const pierwsza = s.wykres[0][1];
+  const zmiana = (s.cena / pierwsza - 1) * 100;
+  document.getElementById("okno-info").innerHTML =
+    "<span>Cena <strong>" + kwota(s.cena) + " " + esc(s.waluta) + "</strong></span>" +
+    "<span>Szczyt " + DANE.dni + "d <strong>" + kwota(s.szczyt) + "</strong> (" + s.data_szczytu + ")</span>" +
+    "<span>Zmiana w " + DANE.dni + " dni <strong>" + procent(zmiana) + "</strong></span>";
+  okno.showModal();
+  rysuj(s);
+}
+document.getElementById("zamknij").addEventListener("click", () => okno.close());
+okno.addEventListener("click", e => { if (e.target === okno) okno.close(); });   // klik w tło zamyka
+okno.addEventListener("close", () => { otwarta = null; });
+window.addEventListener("resize", () => { if (otwarta) rysuj(otwarta); });
+
+function rysuj(s) {
+  const pole = document.getElementById("wykres");
+  const dymek = document.getElementById("dymek");
+  pole.querySelectorAll("svg").forEach(el => el.remove());
+  dymek.style.display = "none";
+
+  const W = pole.clientWidth || 320, H = Math.round(Math.min(280, Math.max(200, W * 0.55)));
+  const L = 6, P = 58, G = 14, D = 26;          // marginesy: lewy, prawy (opisy cen), górny, dolny (daty)
+  const punkty = s.wykres, n = punkty.length;
+  const ceny = punkty.map(p => p[1]);
+  let min = Math.min(...ceny), max = Math.max(...ceny);
+  const zapas = (max - min) * 0.08 || max * 0.05 || 1;
+  min -= zapas; max += zapas;
+
+  const x = i => L + (n > 1 ? i * (W - L - P) / (n - 1) : (W - L - P) / 2);
+  const y = v => G + (max - v) / (max - min) * (H - G - D);
+
+  let svg = '<svg viewBox="0 0 ' + W + " " + H + '" height="' + H + '" role="img" aria-label="Wykres ceny z ostatnich ' + DANE.dni + ' dni">';
+
+  // siatka i opisy cen po prawej
+  for (let k = 0; k <= 3; k++) {
+    const v = min + (max - min) * (k + 0.5) / 4;
+    if (Math.abs(y(v) - y(s.szczyt)) < 16) continue;   // nie nachodź na opis szczytu
+    svg += '<line x1="' + L + '" x2="' + (W - P) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--linia)" stroke-width="1"/>';
+    svg += '<text x="' + (W - P + 6) + '" y="' + (y(v) + 4) + '">' + kwota(v) + "</text>";
+  }
+  // daty na dole: początek, środek, koniec
+  [0, Math.floor((n - 1) / 2), n - 1].forEach((i, k) => {
+    const kotwica = k === 0 ? "start" : k === 2 ? "end" : "middle";
+    svg += '<text x="' + x(i) + '" y="' + (H - 7) + '" text-anchor="' + kotwica + '">' + dataPL(punkty[i][0]).slice(0, 5) + "</text>";
+  });
+
+  // linia szczytu lokalnego
+  svg += '<line x1="' + L + '" x2="' + (W - P) + '" y1="' + y(s.szczyt) + '" y2="' + y(s.szczyt) + '" stroke="var(--szary)" stroke-width="1" stroke-dasharray="4 4"/>';
+  svg += '<text x="' + (L + 2) + '" y="' + (y(s.szczyt) - 5) + '">szczyt ' + DANE.dni + 'd</text>';
+  svg += '<text x="' + (W - P + 6) + '" y="' + (y(s.szczyt) + 4) + '" style="font-weight:700;fill:var(--tekst)">' + kwota(s.szczyt) + "</text>";
+
+  // pole pod wykresem i linia ceny
+  let linia = "";
+  punkty.forEach((p, i) => { linia += (i ? "L" : "M") + x(i).toFixed(1) + "," + y(p[1]).toFixed(1); });
+  const pod = linia + "L" + x(n - 1).toFixed(1) + "," + (H - D) + "L" + x(0).toFixed(1) + "," + (H - D) + "Z";
+  svg += '<path d="' + pod + '" fill="var(--akcent-tlo)"/>';
+  svg += '<path d="' + linia + '" fill="none" stroke="var(--akcent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+
+  // ostatnia cena — kropka
+  svg += '<circle cx="' + x(n - 1) + '" cy="' + y(ceny[n - 1]) + '" r="4.5" fill="var(--akcent)" stroke="var(--karta)" stroke-width="2"/>';
+
+  // celownik (pokazywany przy dotyku / najechaniu)
+  svg += '<line id="celownik" y1="' + G + '" y2="' + (H - D) + '" stroke="var(--szary)" stroke-width="1" visibility="hidden"/>';
+  svg += '<circle id="punkt" r="5" fill="var(--akcent)" stroke="var(--karta)" stroke-width="2" visibility="hidden"/>';
+  svg += '<rect id="obszar" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/>';
+  svg += "</svg>";
+  pole.insertAdjacentHTML("afterbegin", svg);
+
+  const celownik = pole.querySelector("#celownik"), punkt = pole.querySelector("#punkt");
+  function pokaz(e) {
+    const r = pole.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(n - 1, Math.round((px - L) / ((W - L - P) / Math.max(1, n - 1)))));
+    const cx = x(i), cy = y(ceny[i]);
+    celownik.setAttribute("x1", cx); celownik.setAttribute("x2", cx); celownik.setAttribute("visibility", "visible");
+    punkt.setAttribute("cx", cx); punkt.setAttribute("cy", cy); punkt.setAttribute("visibility", "visible");
+    const odSzczytu = (ceny[i] / s.szczyt - 1) * 100;
+    dymek.innerHTML = dataPL(punkty[i][0]) + "<br><b>" + kwota(ceny[i]) + " " + esc(s.waluta) + "</b> · " + procent(odSzczytu) + " od szczytu";
+    dymek.style.display = "block";
+    const szer = dymek.offsetWidth, ekranX = cx * (r.width / W);
+    dymek.style.left = Math.max(0, Math.min(r.width - szer, ekranX - szer / 2)) + "px";
+    dymek.style.top = Math.max(0, cy * (r.height / H) - dymek.offsetHeight - 12) + "px";
+  }
+  function ukryj() {
+    celownik.setAttribute("visibility", "hidden"); punkt.setAttribute("visibility", "hidden");
+    dymek.style.display = "none";
+  }
+  const obszar = pole.querySelector("#obszar");
+  obszar.addEventListener("pointerdown", pokaz);
+  obszar.addEventListener("pointermove", pokaz);
+  obszar.addEventListener("pointerleave", ukryj);
+}
+</script>
+</body>
+</html>

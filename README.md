@@ -35,6 +35,9 @@ Plik `.github/workflows/strona.yml` każe GitHubowi co 2 godziny uruchamiać skr
 `https://<twoj-login>.github.io/watchlista/`. Strona odświeża się też po każdym `git push`.
 Ręczne odświeżenie: na GitHubie zakładka **Actions** → „Odśwież stronę watchlisty” → **Run workflow**.
 
+Każda spółka ma kartę: cena z walutą, szczyt z ostatnich 90 dni (cena i data), ATH (cena i data).
+Dotknięcie karty otwiera wykres z ostatnich 90 dni. Wygląd strony zmieniasz w `szablon.html`.
+
 Na iPhonie: otwórz stronę w Safari → przycisk Udostępnij → **Do ekranu początkowego**.
 
 Lokalny podgląd strony: `.venv/bin/python watchlista.py --html _site/index.html && open _site/index.html`

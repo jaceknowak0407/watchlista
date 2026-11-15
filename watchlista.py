@@ -5,10 +5,10 @@ Ze stroną WWW: .venv/bin/python watchlista.py --html _site/index.html
 """
 
 import argparse
+import json
 import logging
 import warnings
 from datetime import datetime, timedelta
-from html import escape
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -26,8 +26,10 @@ LOKALNY_OKRES_DNI = 90   # "lokalny szczyt" = najwyższe zamknięcie z ostatnich
 PROG_CZERWONY = 20       # spadek większy niż tyle % -> kolor czerwony
 PROG_ZOLTY = 10          # spadek większy niż tyle % -> kolor żółty
 
-# Plik z listą spółek leży obok skryptu, więc skrypt działa z dowolnego katalogu.
-PLIK_SPOLEK = Path(__file__).parent / "spolki.txt"
+# Pliki leżą obok skryptu, więc skrypt działa z dowolnego katalogu.
+FOLDER = Path(__file__).parent
+PLIK_SPOLEK = FOLDER / "spolki.txt"
+PLIK_SZABLONU = FOLDER / "szablon.html"   # wygląd strony WWW
 
 console = Console()
 
@@ -70,19 +72,29 @@ def pobierz_dane(ticker):
         zamkniecia = zamkniecia / 100
         waluta = "GBP"
 
-    ath = zamkniecia.max()
-    data_ath = zamkniecia.idxmax()  # dzień, w którym padło ATH
-    cena = zamkniecia.iloc[-1]
+    cena = float(zamkniecia.iloc[-1])
+
+    # ATH = najwyższe zamknięcie w całej historii (i dzień, w którym padło).
+    ath = float(zamkniecia.max())
+    data_ath = zamkniecia.idxmax()
+
+    # Lokalny szczyt = najwyższe zamknięcie z ostatnich N dni.
     od_kiedy = zamkniecia.index[-1] - timedelta(days=LOKALNY_OKRES_DNI)
-    lokalny_szczyt = zamkniecia[zamkniecia.index >= od_kiedy].max()
+    ostatnie = zamkniecia[zamkniecia.index >= od_kiedy]
+    szczyt = float(ostatnie.max())
+    data_szczytu = ostatnie.idxmax()
 
     return {
         "waluta": waluta,
+        "cena": cena,
         "ath": ath,
         "data_ath": data_ath.strftime("%d.%m.%Y"),
-        "cena": cena,
+        "szczyt": szczyt,
+        "data_szczytu": data_szczytu.strftime("%d.%m.%Y"),
         "od_ath": (cena / ath - 1) * 100,
-        "od_lokalnego": (cena / lokalny_szczyt - 1) * 100,
+        "od_lokalnego": (cena / szczyt - 1) * 100,
+        # Notowania z ostatnich N dni — do wykresu na stronie: [data, cena].
+        "wykres": [[d.strftime("%Y-%m-%d"), round(float(v), 4)] for d, v in ostatnie.items()],
     }
 
 
@@ -121,13 +133,15 @@ def zbierz_wyniki():
 
 def pokaz_w_terminalu(wyniki):
     """Rysuje kolorową tabelę w terminalu."""
-    tabela =Table(title=f"Watchlista (lokalny szczyt = ostatnie {LOKALNY_OKRES_DNI} dni)")
+    tabela = Table(title=f"Watchlista (lokalny szczyt = ostatnie {LOKALNY_OKRES_DNI} dni)")
     tabela.add_column("Nazwa", no_wrap=True)
     tabela.add_column("Ticker", style="cyan")
     tabela.add_column("Waluta")
+    tabela.add_column("Cena", justify="right", style="bold")
+    tabela.add_column(f"Szczyt {LOKALNY_OKRES_DNI}d", justify="right")
+    tabela.add_column("Data szczytu", justify="right", style="dim")
     tabela.add_column("ATH", justify="right")
-    tabela.add_column("Data ATH", justify="right")
-    tabela.add_column("Cena", justify="right")
+    tabela.add_column("Data ATH", justify="right", style="dim")
     tabela.add_column("% od ATH", justify="right")
     tabela.add_column(f"% od szczytu {LOKALNY_OKRES_DNI}d", justify="right")
 
@@ -136,9 +150,11 @@ def pokaz_w_terminalu(wyniki):
             w["nazwa"],
             w["ticker"],
             w["waluta"],
+            f"{w['cena']:,.2f}",
+            f"{w['szczyt']:,.2f}",
+            w["data_szczytu"],
             f"{w['ath']:,.2f}",
             w["data_ath"],
-            f"{w['cena']:,.2f}",
             pokoloruj(w["od_ath"]),
             pokoloruj(w["od_lokalnego"]),
         )
@@ -146,89 +162,23 @@ def pokaz_w_terminalu(wyniki):
     console.print(tabela)
 
 
-def klasa_koloru(procent):
-    """Nazwa klasy CSS dla strony HTML (ten sam podział co kolory w terminalu)."""
-    if procent < -PROG_CZERWONY:
-        return "czerwony"
-    if procent < -PROG_ZOLTY:
-        return "zolty"
-    return ""
-
-
-def kwota(liczba):
-    """Formatuje cenę na stronę: duże kwoty bez groszy, żeby zmieściły się na telefonie."""
-    if liczba >= 1000:
-        return f"{liczba:,.0f}"
-    return f"{liczba:,.2f}"
-
-
 def zapisz_html(wyniki, sciezka):
-    """Zapisuje tabelę jako stronę HTML wygodną do oglądania na telefonie."""
-    teraz = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y %H:%M")
-    wiersze = []
-    for w in wyniki:
-        wiersze.append(
-            "<tr>"
-            f"<td><b>{escape(w['nazwa'])}</b><small>{escape(w['ticker'])}</small></td>"
-            f"<td class='l'>{kwota(w['cena'])}<small>{escape(w['waluta'])}</small></td>"
-            f"<td class='l'>{kwota(w['ath'])}<small>{w['data_ath']}</small></td>"
-            f"<td class='l {klasa_koloru(w['od_ath'])}'>{w['od_ath']:+.1f}%</td>"
-            f"<td class='l {klasa_koloru(w['od_lokalnego'])}'>{w['od_lokalnego']:+.1f}%</td>"
-            "</tr>"
-        )
-    strona = SZABLON_HTML.format(
-        dni=LOKALNY_OKRES_DNI,
-        teraz=teraz,
-        wiersze="\n".join(wiersze),
-    )
+    """Wkłada dane do szablonu strony (szablon.html) i zapisuje gotową stronę."""
+    dane = {
+        "aktualizacja": datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y %H:%M"),
+        "dni": LOKALNY_OKRES_DNI,
+        "prog_czerwony": PROG_CZERWONY,
+        "prog_zolty": PROG_ZOLTY,
+        "spolki": wyniki,
+    }
+    # "<\/" zamiast "</" — żeby tekst z danych nie mógł przypadkiem zamknąć znacznika <script>.
+    dane_json = json.dumps(dane, ensure_ascii=False).replace("</", "<\\/")
+    strona = PLIK_SZABLONU.read_text(encoding="utf-8").replace("__DANE__", dane_json)
+
     sciezka = Path(sciezka)
     sciezka.parent.mkdir(parents=True, exist_ok=True)
     sciezka.write_text(strona, encoding="utf-8")
     console.print(f"Zapisano stronę: {sciezka}")
-
-
-# Wygląd strony. Podwójne {{ }} to zwykłe nawiasy klamrowe w CSS (pojedyncze { } to miejsca na dane).
-SZABLON_HTML = """<!doctype html>
-<html lang="pl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Watchlista">
-<title>Watchlista</title>
-<style>
-  :root {{ --tlo:#fff; --tekst:#111; --szary:#777; --linia:#e5e5e5;
-          --czerwony:#d1242f; --zolty:#9a6700; }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{ --tlo:#111; --tekst:#eee; --szary:#999; --linia:#2a2a2a;
-            --czerwony:#ff6b6b; --zolty:#f0c040; }}
-  }}
-  body {{ margin:0; padding:16px 12px; background:var(--tlo); color:var(--tekst);
-         font:15px -apple-system, system-ui, sans-serif; }}
-  h1 {{ font-size:20px; margin:0 0 4px; }}
-  p {{ margin:0 0 12px; color:var(--szary); font-size:13px; }}
-  table {{ width:100%; border-collapse:collapse; }}
-  th {{ text-align:left; font-size:12px; color:var(--szary); font-weight:600;
-       padding:6px 4px; border-bottom:1px solid var(--linia); }}
-  td {{ padding:8px 3px; border-bottom:1px solid var(--linia); vertical-align:top; }}
-  .l {{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }}
-  small {{ display:block; color:var(--szary); font-size:12px; font-weight:normal; }}
-  .czerwony {{ color:var(--czerwony); font-weight:600; }}
-  .zolty {{ color:var(--zolty); font-weight:600; }}
-</style>
-</head>
-<body>
-<h1>Watchlista</h1>
-<p>Aktualizacja: {teraz} · szczyt lokalny = ostatnie {dni} dni</p>
-<table>
-<thead><tr><th>Spółka</th><th class="l">Cena</th><th class="l">ATH / data</th><th class="l">od ATH</th><th class="l">od {dni}d</th></tr></thead>
-<tbody>
-{wiersze}
-</tbody>
-</table>
-</body>
-</html>
-"""
 
 
 def main():
