@@ -1,0 +1,29 @@
+# Lista obserwowanych spółek: jeden ticker w linii, po "#" nazwa spółki.
+# Puste linie i linie zaczynające się od "#" są pomijane.
+
+YCA.L    # Yellow Cake plc (cena w pensach GBp)
+NXE      # NexGen Energy
+UUUU     # Energy Fuels
+EU       # enCore Energy
+CCJ      # Cameco
+URA      # Global X Uranium ETF
+UEC      # Uranium Energy
+URNM     # Sprott Uranium Miners ETF
+URNJ     # Sprott Junior Uranium Miners ETF
+AEM      # Agnico Eagle
+RIO      # Rio Tinto
+FCX      # Freeport-McMoRan
+SCCO     # Southern Copper
+CVX      # Chevron
+BHP      # BHP Group
+XOM      # Exxon Mobil
+MO       # Altria
+BTI      # British American Tobacco
+PAAS     # Pan American Silver
+WPM      # Wheaton Precious Metals
+SBSW     # Sibanye-Stillwater
+EC       # Ecopetrol
+FNV      # Franco-Nevada
+PBR      # Petrobras
+BLK      # BlackRock
+BTC-USD  # Bitcoin
