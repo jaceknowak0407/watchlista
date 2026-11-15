@@ -71,6 +71,7 @@ def pobierz_dane(ticker):
         waluta = "GBP"
 
     ath = zamkniecia.max()
+    data_ath = zamkniecia.idxmax()  # dzień, w którym padło ATH
     cena = zamkniecia.iloc[-1]
     od_kiedy = zamkniecia.index[-1] - timedelta(days=LOKALNY_OKRES_DNI)
     lokalny_szczyt = zamkniecia[zamkniecia.index >= od_kiedy].max()
@@ -78,6 +79,7 @@ def pobierz_dane(ticker):
     return {
         "waluta": waluta,
         "ath": ath,
+        "data_ath": data_ath.strftime("%d.%m.%Y"),
         "cena": cena,
         "od_ath": (cena / ath - 1) * 100,
         "od_lokalnego": (cena / lokalny_szczyt - 1) * 100,
@@ -124,6 +126,7 @@ def pokaz_w_terminalu(wyniki):
     tabela.add_column("Ticker", style="cyan")
     tabela.add_column("Waluta")
     tabela.add_column("ATH", justify="right")
+    tabela.add_column("Data ATH", justify="right")
     tabela.add_column("Cena", justify="right")
     tabela.add_column("% od ATH", justify="right")
     tabela.add_column(f"% od szczytu {LOKALNY_OKRES_DNI}d", justify="right")
@@ -134,6 +137,7 @@ def pokaz_w_terminalu(wyniki):
             w["ticker"],
             w["waluta"],
             f"{w['ath']:,.2f}",
+            w["data_ath"],
             f"{w['cena']:,.2f}",
             pokoloruj(w["od_ath"]),
             pokoloruj(w["od_lokalnego"]),
@@ -151,6 +155,13 @@ def klasa_koloru(procent):
     return ""
 
 
+def kwota(liczba):
+    """Formatuje cenę na stronę: duże kwoty bez groszy, żeby zmieściły się na telefonie."""
+    if liczba >= 1000:
+        return f"{liczba:,.0f}"
+    return f"{liczba:,.2f}"
+
+
 def zapisz_html(wyniki, sciezka):
     """Zapisuje tabelę jako stronę HTML wygodną do oglądania na telefonie."""
     teraz = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y %H:%M")
@@ -158,8 +169,9 @@ def zapisz_html(wyniki, sciezka):
     for w in wyniki:
         wiersze.append(
             "<tr>"
-            f"<td><b>{escape(w['nazwa'])}</b><small>{escape(w['ticker'])} · {escape(w['waluta'])}</small></td>"
-            f"<td class='l'>{w['cena']:,.2f}<small>ATH {w['ath']:,.2f}</small></td>"
+            f"<td><b>{escape(w['nazwa'])}</b><small>{escape(w['ticker'])}</small></td>"
+            f"<td class='l'>{kwota(w['cena'])}<small>{escape(w['waluta'])}</small></td>"
+            f"<td class='l'>{kwota(w['ath'])}<small>{w['data_ath']}</small></td>"
             f"<td class='l {klasa_koloru(w['od_ath'])}'>{w['od_ath']:+.1f}%</td>"
             f"<td class='l {klasa_koloru(w['od_lokalnego'])}'>{w['od_lokalnego']:+.1f}%</td>"
             "</tr>"
@@ -191,14 +203,14 @@ SZABLON_HTML = """<!doctype html>
     :root {{ --tlo:#111; --tekst:#eee; --szary:#999; --linia:#2a2a2a;
             --czerwony:#ff6b6b; --zolty:#f0c040; }}
   }}
-  body {{ margin:0; padding:16px; background:var(--tlo); color:var(--tekst);
+  body {{ margin:0; padding:16px 12px; background:var(--tlo); color:var(--tekst);
          font:15px -apple-system, system-ui, sans-serif; }}
   h1 {{ font-size:20px; margin:0 0 4px; }}
   p {{ margin:0 0 12px; color:var(--szary); font-size:13px; }}
   table {{ width:100%; border-collapse:collapse; }}
   th {{ text-align:left; font-size:12px; color:var(--szary); font-weight:600;
        padding:6px 4px; border-bottom:1px solid var(--linia); }}
-  td {{ padding:8px 4px; border-bottom:1px solid var(--linia); vertical-align:top; }}
+  td {{ padding:8px 3px; border-bottom:1px solid var(--linia); vertical-align:top; }}
   .l {{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }}
   small {{ display:block; color:var(--szary); font-size:12px; font-weight:normal; }}
   .czerwony {{ color:var(--czerwony); font-weight:600; }}
@@ -209,7 +221,7 @@ SZABLON_HTML = """<!doctype html>
 <h1>Watchlista</h1>
 <p>Aktualizacja: {teraz} · szczyt lokalny = ostatnie {dni} dni</p>
 <table>
-<thead><tr><th>Spółka</th><th class="l">Cena</th><th class="l">od ATH</th><th class="l">od {dni}d</th></tr></thead>
+<thead><tr><th>Spółka</th><th class="l">Cena</th><th class="l">ATH / data</th><th class="l">od ATH</th><th class="l">od {dni}d</th></tr></thead>
 <tbody>
 {wiersze}
 </tbody>
