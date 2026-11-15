@@ -29,6 +29,16 @@ source ~/.zshrc
 ```
 Od teraz w dowolnym oknie terminala wystarczy wpisać: `watchlista`
 
+## Na telefonie (GitHub Pages)
+Plik `.github/workflows/strona.yml` każe GitHubowi co 2 godziny uruchamiać skrypt
+(`python watchlista.py --html _site/index.html`) i publikować wynik jako stronę
+`https://<twoj-login>.github.io/watchlista/`. Strona odświeża się też po każdym `git push`.
+Ręczne odświeżenie: na GitHubie zakładka **Actions** → „Odśwież stronę watchlisty” → **Run workflow**.
+
+Na iPhonie: otwórz stronę w Safari → przycisk Udostępnij → **Do ekranu początkowego**.
+
+Lokalny podgląd strony: `.venv/bin/python watchlista.py --html _site/index.html && open _site/index.html`
+
 ## Dostosowanie
 - **Lista spółek** — edytuj `spolki.txt`: jeden ticker w linii, po `#` nazwa.
   Tickery sprawdzisz na https://finance.yahoo.com (np. giełda londyńska ma końcówkę `.L`).

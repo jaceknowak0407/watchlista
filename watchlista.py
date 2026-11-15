@@ -1,12 +1,16 @@
 """Watchlista: pokazuje, jak daleko spółki są od swoich szczytów.
 
 Uruchomienie:  .venv/bin/python watchlista.py
+Ze stroną WWW: .venv/bin/python watchlista.py --html _site/index.html
 """
 
+import argparse
 import logging
 import warnings
-from datetime import timedelta
+from datetime import datetime, timedelta
+from html import escape
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 # Wyciszamy niegroźne ostrzeżenie o starej bibliotece SSL w systemowym Pythonie macOS.
 warnings.filterwarnings("ignore", message=".*OpenSSL.*")
@@ -90,7 +94,8 @@ def pokoloruj(procent):
     return tekst
 
 
-def main():
+def zbierz_wyniki():
+    """Pobiera dane dla wszystkich spółek z pliku i zwraca je posortowane."""
     spolki = wczytaj_spolki(PLIK_SPOLEK)
     wyniki = []
 
@@ -109,8 +114,12 @@ def main():
 
     # Największy spadek od lokalnego szczytu na górze.
     wyniki.sort(key=lambda w: w["od_lokalnego"])
+    return wyniki
 
-    tabela = Table(title=f"Watchlista (lokalny szczyt = ostatnie {LOKALNY_OKRES_DNI} dni)")
+
+def pokaz_w_terminalu(wyniki):
+    """Rysuje kolorową tabelę w terminalu."""
+    tabela =Table(title=f"Watchlista (lokalny szczyt = ostatnie {LOKALNY_OKRES_DNI} dni)")
     tabela.add_column("Nazwa", no_wrap=True)
     tabela.add_column("Ticker", style="cyan")
     tabela.add_column("Waluta")
@@ -131,6 +140,94 @@ def main():
         )
 
     console.print(tabela)
+
+
+def klasa_koloru(procent):
+    """Nazwa klasy CSS dla strony HTML (ten sam podział co kolory w terminalu)."""
+    if procent < -PROG_CZERWONY:
+        return "czerwony"
+    if procent < -PROG_ZOLTY:
+        return "zolty"
+    return ""
+
+
+def zapisz_html(wyniki, sciezka):
+    """Zapisuje tabelę jako stronę HTML wygodną do oglądania na telefonie."""
+    teraz = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y %H:%M")
+    wiersze = []
+    for w in wyniki:
+        wiersze.append(
+            "<tr>"
+            f"<td><b>{escape(w['nazwa'])}</b><small>{escape(w['ticker'])} · {escape(w['waluta'])}</small></td>"
+            f"<td class='l'>{w['cena']:,.2f}<small>ATH {w['ath']:,.2f}</small></td>"
+            f"<td class='l {klasa_koloru(w['od_ath'])}'>{w['od_ath']:+.1f}%</td>"
+            f"<td class='l {klasa_koloru(w['od_lokalnego'])}'>{w['od_lokalnego']:+.1f}%</td>"
+            "</tr>"
+        )
+    strona = SZABLON_HTML.format(
+        dni=LOKALNY_OKRES_DNI,
+        teraz=teraz,
+        wiersze="\n".join(wiersze),
+    )
+    sciezka = Path(sciezka)
+    sciezka.parent.mkdir(parents=True, exist_ok=True)
+    sciezka.write_text(strona, encoding="utf-8")
+    console.print(f"Zapisano stronę: {sciezka}")
+
+
+# Wygląd strony. Podwójne {{ }} to zwykłe nawiasy klamrowe w CSS (pojedyncze { } to miejsca na dane).
+SZABLON_HTML = """<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Watchlista">
+<title>Watchlista</title>
+<style>
+  :root {{ --tlo:#fff; --tekst:#111; --szary:#777; --linia:#e5e5e5;
+          --czerwony:#d1242f; --zolty:#9a6700; }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{ --tlo:#111; --tekst:#eee; --szary:#999; --linia:#2a2a2a;
+            --czerwony:#ff6b6b; --zolty:#f0c040; }}
+  }}
+  body {{ margin:0; padding:16px; background:var(--tlo); color:var(--tekst);
+         font:15px -apple-system, system-ui, sans-serif; }}
+  h1 {{ font-size:20px; margin:0 0 4px; }}
+  p {{ margin:0 0 12px; color:var(--szary); font-size:13px; }}
+  table {{ width:100%; border-collapse:collapse; }}
+  th {{ text-align:left; font-size:12px; color:var(--szary); font-weight:600;
+       padding:6px 4px; border-bottom:1px solid var(--linia); }}
+  td {{ padding:8px 4px; border-bottom:1px solid var(--linia); vertical-align:top; }}
+  .l {{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }}
+  small {{ display:block; color:var(--szary); font-size:12px; font-weight:normal; }}
+  .czerwony {{ color:var(--czerwony); font-weight:600; }}
+  .zolty {{ color:var(--zolty); font-weight:600; }}
+</style>
+</head>
+<body>
+<h1>Watchlista</h1>
+<p>Aktualizacja: {teraz} · szczyt lokalny = ostatnie {dni} dni</p>
+<table>
+<thead><tr><th>Spółka</th><th class="l">Cena</th><th class="l">od ATH</th><th class="l">od {dni}d</th></tr></thead>
+<tbody>
+{wiersze}
+</tbody>
+</table>
+</body>
+</html>
+"""
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Watchlista spółek")
+    parser.add_argument("--html", metavar="PLIK", help="zapisz też stronę HTML do podanego pliku")
+    argumenty = parser.parse_args()
+
+    wyniki = zbierz_wyniki()
+    pokaz_w_terminalu(wyniki)
+    if argumenty.html:
+        zapisz_html(wyniki, argumenty.html)
 
 
 if __name__ == "__main__":
