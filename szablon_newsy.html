@@ -1,0 +1,205 @@
+<!doctype html>
+<!--
+  Szablon podstrony z newsami. Skrypt newsy.py wstawia dane w miejsce __DANE__
+  i zapisuje gotową stronę (np. _site/newsy.html). Tu zmieniasz tylko wygląd.
+-->
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Watchlista">
+<title>Watchlista – newsy</title>
+<style>
+  :root {
+    --tlo: #f3f4f7; --karta: #ffffff; --tekst: #14161c; --szary: #6b7080; --linia: #e4e6ec;
+    --akcent: #2563eb; --akcent-tlo: rgba(37, 99, 235, .12);
+    --neutral-tlo: #eceef3;
+    --uran: #0d7d6c;   --uran-tlo: #dcf3ee;
+    --krypto: #6d3fd9; --krypto-tlo: #ece5fc;
+    --zloto: #8a5a00;  --zloto-tlo: #f7ecd5;
+    --ropa: #3d4250;   --ropa-tlo: #e3e5ea;
+    --cien: 0 1px 3px rgba(20, 22, 28, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tlo: #0e0f13; --karta: #1a1c22; --tekst: #eceef3; --szary: #9aa0ae; --linia: #2b2e37;
+      --akcent: #6aa1ff; --akcent-tlo: rgba(106, 161, 255, .16);
+      --neutral-tlo: rgba(195, 200, 212, .12);
+      --uran: #4fd1bd;   --uran-tlo: rgba(79, 209, 189, .14);
+      --krypto: #b49bff; --krypto-tlo: rgba(180, 155, 255, .16);
+      --zloto: #e5b85c;  --zloto-tlo: rgba(229, 184, 92, .15);
+      --ropa: #c3c8d4;   --ropa-tlo: rgba(195, 200, 212, .14);
+      --cien: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 12px 40px; background: var(--tlo); color: var(--tekst);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -.01em; }
+  .podtytul { color: var(--szary); font-size: 13px; margin: 2px 0 12px; }
+
+  /* Zakładki Notowania / Newsy */
+  .zakladki { display: flex; gap: 4px; background: var(--neutral-tlo); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+  .zakladki a {
+    flex: 1; text-align: center; padding: 8px; border-radius: 9px; text-decoration: none;
+    color: var(--szary); font-weight: 600; font-size: 14px;
+  }
+  .zakladki a.aktywna { background: var(--karta); color: var(--tekst); box-shadow: var(--cien); }
+
+  /* Filtry */
+  .filtry { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 8px; scrollbar-width: none; }
+  .filtry::-webkit-scrollbar { display: none; }
+  .filtr {
+    all: unset; cursor: pointer; flex-shrink: 0; padding: 6px 12px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; background: var(--karta); color: var(--tekst);
+    box-shadow: inset 0 0 0 1px var(--linia);
+  }
+  .filtr span { color: var(--szary); font-weight: 500; margin-left: 4px; }
+  .filtr.wlaczony { background: var(--tekst); color: var(--karta); box-shadow: none; }
+  .filtr.wlaczony span { color: inherit; opacity: .7; }
+  .jezyk { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--szary); margin-bottom: 14px; }
+  .jezyk .filtr { padding: 4px 10px; font-size: 12px; }
+
+  /* Lista newsów */
+  .dzien { font-size: 13px; font-weight: 700; color: var(--szary); text-transform: uppercase;
+           letter-spacing: .04em; margin: 18px 4px 8px; }
+  .news {
+    display: block; background: var(--karta); border-radius: 14px; padding: 12px 14px;
+    margin-bottom: 8px; box-shadow: var(--cien); text-decoration: none; color: inherit;
+  }
+  .news:active { transform: scale(.99); }
+  .news h3 { margin: 0 0 6px; font-size: 15.5px; line-height: 1.35; font-weight: 650; }
+  .meta { font-size: 12px; color: var(--szary); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .etykiety { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .etykieta {
+    all: unset; cursor: pointer; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+    color: var(--k); background: var(--k-tlo);
+  }
+  .t-uran   { --k: var(--uran);   --k-tlo: var(--uran-tlo); }
+  .t-krypto { --k: var(--krypto); --k-tlo: var(--krypto-tlo); }
+  .t-zloto  { --k: var(--zloto);  --k-tlo: var(--zloto-tlo); }
+  .t-ropa   { --k: var(--ropa);   --k-tlo: var(--ropa-tlo); }
+  .t-spolka { --k: var(--akcent); --k-tlo: var(--akcent-tlo); }
+  .pl { font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: var(--neutral-tlo); color: var(--tekst); }
+  .pusto { text-align: center; color: var(--szary); padding: 40px 10px; }
+  .stopka { color: var(--szary); font-size: 12px; margin-top: 18px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Newsy</h1>
+  <div class="podtytul" id="podtytul"></div>
+  <nav class="zakladki">
+    <a href="index.html">Notowania</a>
+    <a href="newsy.html" class="aktywna">Newsy</a>
+  </nav>
+  <div class="filtry" id="filtry"></div>
+  <div class="jezyk" id="jezyk"></div>
+  <div id="lista"></div>
+  <div class="stopka">Źródła: Yahoo Finance (kanał każdej spółki), Mining.com, OilPrice.com, CoinDesk,
+    Cointelegraph, World Nuclear News, Google News (EN i PL). Dotknij etykiety, aby filtrować.</div>
+</main>
+
+<script>
+const DANE = __DANE__;
+const KLASY = { "Uran": "t-uran", "Krypto": "t-krypto", "Złoto i srebro": "t-zloto", "Ropa i gaz": "t-ropa" };
+
+function esc(t) {
+  return String(t).replace(/[&<>"]/g, z => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[z]));
+}
+function zapamietaj(klucz, wartosc) { try { localStorage.setItem(klucz, wartosc); } catch (e) {} }
+function odczytaj(klucz) { try { return localStorage.getItem(klucz); } catch (e) { return null; } }
+
+function ileTemu(data) {
+  const min = Math.round((Date.now() - data) / 60000);
+  if (min < 1) return "przed chwilą";
+  if (min < 60) return min + " min temu";
+  if (min < 24 * 60) return Math.round(min / 60) + " godz. temu";
+  return data.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+function naglowekDnia(data) {
+  const dzis = new Date(); dzis.setHours(0, 0, 0, 0);
+  const d = new Date(data); d.setHours(0, 0, 0, 0);
+  const roznica = Math.round((dzis - d) / 86400000);
+  if (roznica === 0) return "Dziś";
+  if (roznica === 1) return "Wczoraj";
+  return data.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+}
+
+document.getElementById("podtytul").textContent =
+  "Aktualizacja: " + DANE.aktualizacja + " · ostatnie " + DANE.dni + " dni · " + DANE.newsy.length + " wiadomości";
+
+// Stan filtrów: temat/spółka w adresie (#Uran, #CCJ), język zapamiętany w przeglądarce.
+let jezyk = odczytaj("newsy-jezyk") || "wszystkie";
+function aktualnyFiltr() { return decodeURIComponent(location.hash.slice(1)) || "Wszystkie"; }
+
+function pasuje(n, filtr) {
+  if (jezyk !== "wszystkie" && n.jezyk !== jezyk) return false;
+  if (filtr === "Wszystkie") return true;
+  if (filtr === "Moje spółki") return n.spolki.length > 0;
+  if (DANE.tematy.includes(filtr)) return n.tematy.includes(filtr);
+  return n.spolki.includes(filtr);   // konkretny ticker, np. #CCJ
+}
+
+function rysuj() {
+  const filtr = aktualnyFiltr();
+  const naJezyk = DANE.newsy.filter(n => jezyk === "wszystkie" || n.jezyk === jezyk);
+
+  // przyciski filtrów z licznikami
+  const opcje = ["Wszystkie", "Moje spółki"].concat(DANE.tematy);
+  if (!opcje.includes(filtr)) opcje.push(filtr);   // wybrany ticker
+  document.getElementById("filtry").innerHTML = opcje.map(o => {
+    const ile = naJezyk.filter(n => pasuje(n, o)).length;
+    const nazwa = DANE.nazwy_spolek[o] ? o + " · " + DANE.nazwy_spolek[o] : o;
+    return '<button class="filtr' + (o === filtr ? " wlaczony" : "") + '" data-filtr="' + esc(o) + '">' +
+      esc(nazwa) + "<span>" + ile + "</span></button>";
+  }).join("");
+
+  document.getElementById("jezyk").innerHTML = "Język:" +
+    [["wszystkie", "PL + EN"], ["pl", "Polski"], ["en", "Angielski"]].map(([k, opis]) =>
+      '<button class="filtr' + (k === jezyk ? " wlaczony" : "") + '" data-jezyk="' + k + '">' + opis + "</button>").join("");
+
+  // lista
+  const widoczne = DANE.newsy.filter(n => pasuje(n, filtr));
+  let html = "", ostatniDzien = "";
+  widoczne.forEach(n => {
+    const data = new Date(n.czas);
+    const dzien = naglowekDnia(data);
+    if (dzien !== ostatniDzien) { html += '<div class="dzien">' + dzien + "</div>"; ostatniDzien = dzien; }
+    const etykiety =
+      n.spolki.map(t => '<button class="etykieta t-spolka" data-filtr="' + esc(t) + '">' + esc(t) + "</button>").join("") +
+      n.tematy.map(t => '<button class="etykieta ' + (KLASY[t] || "") + '" data-filtr="' + esc(t) + '">' + esc(t) + "</button>").join("");
+    html +=
+      '<a class="news" href="' + esc(n.link) + '" target="_blank" rel="noopener">' +
+        "<h3>" + esc(n.tytul) + "</h3>" +
+        '<div class="meta">' + (n.jezyk === "pl" ? '<span class="pl">PL</span>' : "") +
+          "<span>" + esc(n.portal) + "</span><span>·</span><span>" + ileTemu(data) + "</span></div>" +
+        '<div class="etykiety">' + etykiety + "</div>" +
+      "</a>";
+  });
+  document.getElementById("lista").innerHTML = html || '<div class="pusto">Brak wiadomości dla tego filtra.</div>';
+}
+
+// kliknięcia: filtr tematu/spółki, język; etykieta w newsie filtruje zamiast otwierać link
+document.addEventListener("click", e => {
+  const przycisk = e.target.closest("[data-filtr], [data-jezyk]");
+  if (!przycisk) return;
+  e.preventDefault();
+  if (przycisk.dataset.jezyk) {
+    jezyk = przycisk.dataset.jezyk; zapamietaj("newsy-jezyk", jezyk); rysuj();
+  } else {
+    const f = przycisk.dataset.filtr;
+    location.hash = f === "Wszystkie" ? "" : encodeURIComponent(f);
+    window.scrollTo({ top: 0 });
+  }
+});
+window.addEventListener("hashchange", rysuj);
+rysuj();
+</script>
+</body>
+</html>

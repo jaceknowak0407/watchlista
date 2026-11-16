@@ -42,6 +42,15 @@ Na iPhonie: otwórz stronę w Safari → przycisk Udostępnij → **Do ekranu po
 
 Lokalny podgląd strony: `.venv/bin/python watchlista.py --html _site/index.html && open _site/index.html`
 
+## Newsy
+Zakładka **Newsy** zbiera wiadomości z ostatnich 3 dni z Yahoo Finance (dla każdej spółki z listy),
+Mining.com, OilPrice.com, CoinDesk, Cointelegraph, World Nuclear News oraz z Google News
+(po angielsku i po polsku). Zostają tylko te o Twoich spółkach albo tematach: uran, krypto,
+złoto i srebro, ropa i gaz. Na stronie filtrujesz po temacie, spółce i języku.
+
+Uruchomienie lokalnie: `.venv/bin/python newsy.py` (lista w terminalu) lub z `--html _site/newsy.html`.
+Słowa kluczowe, tematy i listę portali zmieniasz na górze pliku `newsy.py`.
+
 ## Dostosowanie
 - **Lista spółek** — edytuj `spolki.txt`: jeden ticker w linii, po `#` nazwa.
   Tickery sprawdzisz na https://finance.yahoo.com (np. giełda londyńska ma końcówkę `.L`).

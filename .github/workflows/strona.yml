@@ -30,6 +30,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python watchlista.py --html _site/index.html
+      - run: python newsy.py --html _site/newsy.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

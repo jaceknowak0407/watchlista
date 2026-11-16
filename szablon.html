@@ -124,6 +124,16 @@
     position: absolute; top: 0; pointer-events: none; display: none; white-space: nowrap;
     background: var(--tekst); color: var(--karta); padding: 5px 8px; border-radius: 8px; font-size: 12px;
   }
+  .zakladki { display: flex; gap: 4px; background: var(--ok-tlo); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+  .zakladki a {
+    flex: 1; text-align: center; padding: 8px; border-radius: 9px; text-decoration: none;
+    color: var(--szary); font-weight: 600; font-size: 14px;
+  }
+  .zakladki a.aktywna { background: var(--karta); color: var(--tekst); box-shadow: var(--cien); }
+  .link-newsy {
+    display: block; margin-top: 12px; padding: 10px; border-radius: 10px; text-align: center;
+    background: var(--akcent-tlo); color: var(--akcent); font-weight: 600; text-decoration: none;
+  }
   .stopka { color: var(--szary); font-size: 12px; margin-top: 18px; text-align: center; }
 </style>
 </head>
@@ -131,6 +141,10 @@
 <main>
   <h1>Watchlista</h1>
   <div class="podtytul" id="podtytul"></div>
+  <nav class="zakladki">
+    <a href="index.html" class="aktywna">Notowania</a>
+    <a href="newsy.html">Newsy</a>
+  </nav>
   <div class="podsumowanie" id="podsumowanie"></div>
   <div class="lista" id="lista"></div>
   <div class="stopka">Dotknij spółki, aby zobaczyć wykres. Pasek = obecna cena jako część szczytu z ostatnich dni (pełny pasek = na szczycie).<br> Dane: Yahoo Finance (ceny zamknięcia).</div>
@@ -147,6 +161,7 @@
     </div>
     <div class="okno-info liczby" id="okno-info"></div>
     <div id="wykres"><div id="dymek" class="liczby"></div></div>
+    <a class="link-newsy" id="okno-newsy" href="newsy.html">Newsy o tej spółce →</a>
   </div>
 </dialog>
 
@@ -228,6 +243,7 @@ function otworz(i) {
     "<span>Cena <strong>" + kwota(s.cena) + " " + esc(s.waluta) + "</strong></span>" +
     "<span>Szczyt " + DANE.dni + "d <strong>" + kwota(s.szczyt) + "</strong> (" + s.data_szczytu + ")</span>" +
     "<span>Zmiana w " + DANE.dni + " dni <strong>" + procent(zmiana) + "</strong></span>";
+  document.getElementById("okno-newsy").href = "newsy.html#" + encodeURIComponent(s.ticker === "BTC-USD" ? "Krypto" : s.ticker);
   okno.showModal();
   rysuj(s);
 }
