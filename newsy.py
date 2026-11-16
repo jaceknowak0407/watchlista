@@ -7,6 +7,7 @@ Ze stroną WWW: .venv/bin/python newsy.py --html _site/newsy.html
 
 import argparse
 import json
+import os
 import re
 import urllib.parse
 import urllib.request
@@ -68,6 +69,11 @@ GOOGLE_NEWS = [
 ]
 
 PLIK_SZABLONU = Path(__file__).parent / "szablon_newsy.html"
+
+# Tłumaczenie tytułów EN -> PL przez DeepL API Free. Klucz NIE jest w kodzie: skrypt bierze go
+# ze zmiennej środowiskowej DEEPL_API_KEY (na GitHubie: sekret repozytorium o tej nazwie).
+# Bez klucza tytuły zostają po angielsku.
+DEEPL_KLUCZ = os.environ.get("DEEPL_API_KEY", "").strip()
 # Zwykła przeglądarkowa nazwa klienta — niektóre portale odrzucają zapytania bez niej.
 NAGLOWKI = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) watchlista-rss"}
 
@@ -255,6 +261,69 @@ def pokaz_w_terminalu(newsy):
         console.print(f"[dim]{czas}[/dim] {n['tytul']} [cyan]({etykiety})[/cyan] [dim]— {n['portal']}[/dim]")
 
 
+# ---------------------------------------------------------------
+# Tłumaczenie tytułów na polski (DeepL)
+# ---------------------------------------------------------------
+def wczytaj_stare_tlumaczenia(sciezka):
+    """Czyta poprzednio zapisaną stronę z newsami i zwraca {tytuł angielski: tytuł polski}.
+    Dzięki temu tłumaczymy tylko NOWE tytuły i oszczędzamy darmowy limit DeepL."""
+    try:
+        tekst = Path(sciezka).read_text(encoding="utf-8")
+        dane_json = tekst.split("const DANE = ", 1)[1].split(";\n", 1)[0].replace("<\\/", "</")
+        newsy = json.loads(dane_json)["newsy"]
+    except (OSError, IndexError, ValueError, KeyError):
+        return {}
+    return {n["tytul_en"]: n["tytul"] for n in newsy if n.get("tytul_en")}
+
+
+def tlumacz_deepl(teksty):
+    """Wysyła teksty do DeepL (po 50 naraz) i zwraca listę tłumaczeń w tej samej kolejności."""
+    # Klucze darmowego planu kończą się na ":fx" i mają osobny adres.
+    adres = "https://api-free.deepl.com/v2/translate" if DEEPL_KLUCZ.endswith(":fx") \
+        else "https://api.deepl.com/v2/translate"
+    wynik = []
+    for i in range(0, len(teksty), 50):
+        paczka = teksty[i:i + 50]
+        cialo = json.dumps({"text": paczka, "source_lang": "EN", "target_lang": "PL"}).encode("utf-8")
+        zapytanie = urllib.request.Request(adres, data=cialo, method="POST", headers={
+            "Authorization": "DeepL-Auth-Key " + DEEPL_KLUCZ,
+            "Content-Type": "application/json",
+        })
+        with urllib.request.urlopen(zapytanie, timeout=30) as odp:
+            wynik += [t["text"] for t in json.loads(odp.read())["translations"]]
+    return wynik
+
+
+def przetlumacz_tytuly(newsy, poprzednia_strona):
+    """Zamienia angielskie tytuły na polskie; oryginał zostaje w polu "tytul_en"."""
+    angielskie = [n for n in newsy if n["jezyk"] == "en"]
+    stare = wczytaj_stare_tlumaczenia(poprzednia_strona) if poprzednia_strona else {}
+
+    nowe = []
+    for n in angielskie:
+        if n["tytul"] in stare:
+            n["tytul_en"], n["tytul"] = n["tytul"], stare[n["tytul"]]
+        else:
+            nowe.append(n)
+    console.print(f"Tłumaczenia: {len(angielskie) - len(nowe)} z pamięci, {len(nowe)} nowych tytułów")
+
+    if not nowe:
+        return
+    if not DEEPL_KLUCZ:
+        console.print("[yellow]⚠ Brak klucza DEEPL_API_KEY — nowe tytuły zostają po angielsku.[/yellow]")
+        return
+    try:
+        tlumaczenia = tlumacz_deepl([n["tytul"] for n in nowe])
+    except Exception as blad:
+        # np. 403 = zły klucz, 456 = wyczerpany miesięczny limit
+        console.print(f"[yellow]⚠ DeepL: tłumaczenie nie powiodło się ({blad}) — tytuły po angielsku.[/yellow]")
+        return
+    znaki = sum(len(n["tytul"]) for n in nowe)
+    for n, pl in zip(nowe, tlumaczenia):
+        n["tytul_en"], n["tytul"] = n["tytul"], pl
+    console.print(f"Przetłumaczono {len(nowe)} tytułów ({znaki} znaków z limitu DeepL)")
+
+
 def zapisz_html(newsy, spolki, sciezka):
     """Wkłada dane do szablonu szablon_newsy.html i zapisuje gotową podstronę."""
     dane = {
@@ -278,6 +347,8 @@ def main():
     argumenty = parser.parse_args()
 
     newsy, spolki = zbierz_newsy()
+    # Poprzednia wersja strony (jeśli istnieje) służy jako pamięć gotowych tłumaczeń.
+    przetlumacz_tytuly(newsy, argumenty.html)
     pokaz_w_terminalu(newsy)
     if argumenty.html:
         zapisz_html(newsy, spolki, argumenty.html)

@@ -30,7 +30,11 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python watchlista.py --html _site/index.html
+      # Poprzednia strona z newsami = pamięć gotowych tłumaczeń (oszczędza limit DeepL).
+      - run: curl -sfL -o _site/newsy.html "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/newsy.html" || true
       - run: python newsy.py --html _site/newsy.html
+        env:
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

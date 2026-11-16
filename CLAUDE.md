@@ -6,7 +6,7 @@ tabelę: nazwa | ticker | waluta | ATH | cena | % od ATH | % od lokalnego szczyt
 ## Pliki
 - `watchlista.py` — cały program; ustawienia (`LOKALNY_OKRES_DNI`, progi kolorów) na górze pliku.
 - `szablon.html` — wygląd strony WWW (karty + okienko z wykresem 90 dni, czysty JS/SVG bez bibliotek); Python wstawia dane JSON w miejsce `__DANE__`.
-- `newsy.py` + `szablon_newsy.html` — podstrona Newsy: RSS z Yahoo Finance (kanał na ticker), portali (Mining.com, OilPrice, CoinDesk, Cointelegraph, WNN) i Google News EN/PL; filtr słów kluczowych `TEMATY` (Uran, Krypto, Złoto i srebro, Ropa i gaz) + nazwy spółek w tytule. Tylko biblioteka standardowa (urllib, ElementTree).
+- `newsy.py` + `szablon_newsy.html` — podstrona Newsy: RSS z Yahoo Finance (kanał na ticker), portali (Mining.com, OilPrice, CoinDesk, Cointelegraph, WNN) i Google News EN/PL; filtr słów kluczowych `TEMATY` (Uran, Krypto, Złoto i srebro, Ropa i gaz) + nazwy spółek w tytule. Tylko biblioteka standardowa (urllib, ElementTree). Tytuły EN tłumaczone przez DeepL API Free (env `DEEPL_API_KEY`, sekret w GitHub Actions); cache tłumaczeń = poprzednia opublikowana newsy.html (pole `tytul_en`).
 - `spolki.txt` — lista tickerów: `TICKER  # Nazwa`; tekst w nawiasie to notatka (nie jest wyświetlany).
 - `.venv/` — wirtualne środowisko (nie w gicie); zależności w `requirements.txt` (yfinance, rich).
 

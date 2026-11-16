@@ -49,6 +49,12 @@ Mining.com, OilPrice.com, CoinDesk, Cointelegraph, World Nuclear News oraz z Goo
 złoto i srebro, ropa i gaz. Na stronie filtrujesz po temacie, spółce i języku.
 
 Uruchomienie lokalnie: `.venv/bin/python newsy.py` (lista w terminalu) lub z `--html _site/newsy.html`.
+Angielskie tytuły są tłumaczone na polski przez **DeepL API Free** (oryginał widać pod spodem).
+Klucz jest zapisany na GitHubie jako sekret `DEEPL_API_KEY` (Settings → Secrets and variables → Actions).
+Tłumaczone są tylko nowe tytuły (stare skrypt bierze z poprzedniej wersji strony), więc darmowy
+limit 500 000 znaków/mies. wystarcza. Zużycie: https://www.deepl.com/your-account/usage
+Bez klucza lub po wyczerpaniu limitu tytuły zostają po angielsku.
+
 Słowa kluczowe, tematy i listę portali zmieniasz na górze pliku `newsy.py`.
 
 ## Dostosowanie
