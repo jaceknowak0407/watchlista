@@ -74,6 +74,7 @@ PLIK_SZABLONU = Path(__file__).parent / "szablon_newsy.html"
 # ze zmiennej środowiskowej DEEPL_API_KEY (na GitHubie: sekret repozytorium o tej nazwie).
 # Bez klucza tytuły zostają po angielsku.
 DEEPL_KLUCZ = os.environ.get("DEEPL_API_KEY", "").strip()
+STATUS_TLUMACZENIA = ""   # krótki opis wyniku tłumaczenia — pokazywany w stopce strony
 # Zwykła przeglądarkowa nazwa klienta — niektóre portale odrzucają zapytania bez niej.
 NAGLOWKI = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) watchlista-rss"}
 
@@ -296,6 +297,7 @@ def tlumacz_deepl(teksty):
 
 def przetlumacz_tytuly(newsy, poprzednia_strona):
     """Zamienia angielskie tytuły na polskie; oryginał zostaje w polu "tytul_en"."""
+    global STATUS_TLUMACZENIA
     angielskie = [n for n in newsy if n["jezyk"] == "en"]
     stare = wczytaj_stare_tlumaczenia(poprzednia_strona) if poprzednia_strona else {}
 
@@ -307,20 +309,24 @@ def przetlumacz_tytuly(newsy, poprzednia_strona):
             nowe.append(n)
     console.print(f"Tłumaczenia: {len(angielskie) - len(nowe)} z pamięci, {len(nowe)} nowych tytułów")
 
+    STATUS_TLUMACZENIA = f"z pamięci {len(angielskie) - len(nowe)}, nowe {len(nowe)}"
     if not nowe:
         return
     if not DEEPL_KLUCZ:
+        STATUS_TLUMACZENIA += " — brak klucza DEEPL_API_KEY"
         console.print("[yellow]⚠ Brak klucza DEEPL_API_KEY — nowe tytuły zostają po angielsku.[/yellow]")
         return
     try:
         tlumaczenia = tlumacz_deepl([n["tytul"] for n in nowe])
     except Exception as blad:
         # np. 403 = zły klucz, 456 = wyczerpany miesięczny limit
+        STATUS_TLUMACZENIA += f" — błąd DeepL: {blad} (klucz kończy się na :fx? {DEEPL_KLUCZ.endswith(':fx')})"
         console.print(f"[yellow]⚠ DeepL: tłumaczenie nie powiodło się ({blad}) — tytuły po angielsku.[/yellow]")
         return
     znaki = sum(len(n["tytul"]) for n in nowe)
     for n, pl in zip(nowe, tlumaczenia):
         n["tytul_en"], n["tytul"] = n["tytul"], pl
+    STATUS_TLUMACZENIA += f" — przetłumaczono ({znaki} znaków)"
     console.print(f"Przetłumaczono {len(nowe)} tytułów ({znaki} znaków z limitu DeepL)")
 
 
@@ -329,6 +335,7 @@ def zapisz_html(newsy, spolki, sciezka):
     dane = {
         "aktualizacja": datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y %H:%M"),
         "dni": NEWSY_Z_OSTATNICH_DNI,
+        "tlumaczenie": STATUS_TLUMACZENIA,
         "tematy": list(TEMATY),
         "nazwy_spolek": {t: n for t, n in spolki},
         "newsy": newsy,

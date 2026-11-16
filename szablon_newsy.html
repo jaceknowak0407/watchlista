@@ -103,7 +103,7 @@
   <div class="jezyk" id="jezyk"></div>
   <div id="lista"></div>
   <div class="stopka">Źródła: Yahoo Finance (kanał każdej spółki), Mining.com, OilPrice.com, CoinDesk,
-    Cointelegraph, World Nuclear News, Google News (EN i PL). Dotknij etykiety, aby filtrować.</div>
+    Cointelegraph, World Nuclear News, Google News (EN i PL). Dotknij etykiety, aby filtrować.<br><span id="status-tlumaczenia"></span></div>
 </main>
 
 <script>
@@ -201,6 +201,7 @@ document.addEventListener("click", e => {
   }
 });
 window.addEventListener("hashchange", rysuj);
+if (DANE.tlumaczenie) document.getElementById("status-tlumaczenia").textContent = "Tłumaczenie DeepL: " + DANE.tlumaczenie;
 rysuj();
 </script>
 </body>
