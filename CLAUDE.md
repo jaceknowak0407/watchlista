@@ -10,7 +10,7 @@ tabelę: nazwa | ticker | waluta | ATH | cena | % od ATH | % od lokalnego szczyt
 - `spolki.txt` — lista tickerów: `TICKER  # Nazwa`; `## Sektor` grupuje spółki pod nim; tekst w nawiasie to notatka (nie jest wyświetlany).
 - Strona główna: pasek rynku (`RYNEK` w watchlista.py; uran = SRUUF), zmiana dzienna, sortowanie i filtr sektorów (localStorage).
 - Powiadomienia: ntfy.sh (env `NTFY_TOPIC`, sekret w Actions). Alert przy wejściu w gorszą strefę spadku od szczytu 90d i przy ruchu dziennym ≥ `PROG_DZIEN` (raz dziennie na spółkę). Stan porównania = poprzednia opublikowana index.html (pole `alerty`); pierwsze uruchomienie bez poprzedniej strony nic nie wysyła.
-- Newsy mają skrót z leadu RSS (`zrob_skrot`); źródła bez leadów (Google News) usunięte. DeepL: budżet `DEEPL_ZNAKOW_NA_URUCHOMIENIE`, kolejność: tytuły → skróty o moich spółkach → reszta.
+- Skróty newsów z leadu RSS (`zrob_skrot`) — wyłączone (`SKROTY = False`) na życzenie użytkownika; źródła bez leadów (Google News) usunięte. DeepL: budżet `DEEPL_ZNAKOW_NA_URUCHOMIENIE`, kolejność: tytuły → skróty o moich spółkach → reszta.
 - `.venv/` — wirtualne środowisko (nie w gicie); zależności w `requirements.txt` (yfinance, rich).
 
 ## Uruchamianie

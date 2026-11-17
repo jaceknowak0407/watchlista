@@ -27,7 +27,8 @@ from watchlista import PLIK_SPOLEK, wczytaj_spolki
 # USTAWIENIA — możesz je swobodnie zmieniać
 # ---------------------------------------------------------------
 NEWSY_Z_OSTATNICH_DNI = 3     # starsze wiadomości pomijamy
-MAKS_DLUGOSC_SKROTU = 220     # skrót newsa (z opisu w RSS) — tyle znaków najwyżej
+SKROTY = False                # True = pod tytułem krótki skrót newsa (lead z RSS), tłumaczony przez DeepL
+MAKS_DLUGOSC_SKROTU = 220     # skrót newsa — tyle znaków najwyżej
 MAKS_NA_TEMAT = 80            # ile najwyżej newsów z jednego tematu (żeby krypto nie zalało reszty)
 
 # Tematy i słowa kluczowe. Słowo pasuje, jeśli wyraz w tytule/opisie od niego się ZACZYNA
@@ -77,8 +78,9 @@ PLIK_SZABLONU = Path(__file__).parent / "szablon_newsy.html"
 # ze zmiennej środowiskowej DEEPL_API_KEY (na GitHubie: sekret repozytorium o tej nazwie).
 # Bez klucza tytuły zostają po angielsku.
 DEEPL_KLUCZ = os.environ.get("DEEPL_API_KEY", "").strip()
-# Darmowy DeepL = 500 000 znaków/mies. Przy 12 odświeżeniach dziennie to ~1300 znaków na jedno uruchomienie.
-DEEPL_ZNAKOW_NA_URUCHOMIENIE = 1300
+# Najwyżej tyle znaków DeepL na jedno uruchomienie (darmowy plan: 500 000/mies., skrypt zostawia też 5% zapasu).
+# Same tytuły to ok. 1000 znaków na odświeżenie; wyższy limit pozwala szybko nadrobić zaległości.
+DEEPL_ZNAKOW_NA_URUCHOMIENIE = 4000
 STATUS_TLUMACZENIA = ""   # krótki opis wyniku tłumaczenia — pokazywany w stopce strony
 # Zwykła przeglądarkowa nazwa klienta — niektóre portale odrzucają zapytania bez niej.
 NAGLOWKI = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) watchlista-rss"}
@@ -172,6 +174,8 @@ def wzorce_spolek(spolki):
 
 def zrob_skrot(opis, tytul):
     """Z opisu z RSS robi krótki skrót (do ~220 znaków). Pusty, jeśli opis nic nie wnosi."""
+    if not SKROTY:
+        return ""
     # Usuwamy doklejone nagłówki sekcji, np. "Key TakeawaysCameco stock fell..." -> "Cameco stock fell..."
     opis = re.sub(r"^(Key Takeaways|Key Points|Highlights|Summary)\s*:?\s*", "", opis, flags=re.IGNORECASE)
     if len(opis) < 60 or normalizuj(opis)[:40] == normalizuj(tytul)[:40]:
