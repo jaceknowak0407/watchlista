@@ -74,6 +74,7 @@
   }
   .news:active { transform: scale(.99); }
   .news h3 { margin: 0 0 6px; font-size: 15.5px; line-height: 1.35; font-weight: 650; }
+  .skrot { margin: 0 0 8px; font-size: 14px; line-height: 1.45; color: var(--tekst); opacity: .85; }
   .oryginal { font-size: 12px; color: var(--szary); margin: -2px 0 6px; line-height: 1.3; }
   .meta { font-size: 12px; color: var(--szary); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
   .etykiety { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
@@ -102,8 +103,9 @@
   <div class="filtry" id="filtry"></div>
   <div class="jezyk" id="jezyk"></div>
   <div id="lista"></div>
-  <div class="stopka">Źródła: Yahoo Finance (kanał każdej spółki), Mining.com, OilPrice.com, CoinDesk,
-    Cointelegraph, World Nuclear News, Google News (EN i PL). Dotknij etykiety, aby filtrować.<br><span id="status-tlumaczenia"></span></div>
+  <div class="stopka">Źródła: Yahoo Finance i Nasdaq (kanał każdej spółki), Mining.com, OilPrice.com, Rigzone,
+    World Nuclear News, NucNet, FXStreet, CoinDesk, Cointelegraph, Decrypt, Bitcoin Magazine, CryptoSlate,
+    Bankier.pl, WNP.pl, Business Insider PL, Parkiet. Dotknij etykiety, aby filtrować.<br><span id="status-tlumaczenia"></span></div>
 </main>
 
 <script>
@@ -178,6 +180,7 @@ function rysuj() {
     html +=
       '<a class="news" href="' + esc(n.link) + '" target="_blank" rel="noopener">' +
         "<h3>" + esc(n.tytul) + "</h3>" +
+        (n.skrot ? '<p class="skrot">' + esc(n.skrot) + "</p>" : "") +
         (n.tytul_en ? '<div class="oryginal">' + esc(n.tytul_en) + "</div>" : "") +
         '<div class="meta">' + (n.jezyk === "pl" ? '<span class="pl">PL</span>' : "") +
           "<span>" + esc(n.portal) + "</span><span>·</span><span>" + ileTemu(data) + "</span></div>" +

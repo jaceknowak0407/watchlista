@@ -26,6 +26,8 @@
     --ok: #4b5263;
     --ok-tlo: #eceef3;
     --cien: 0 1px 3px rgba(20, 22, 28, .08);
+    --plus: #1a7f37;
+    --minus: #c81e2c;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -43,6 +45,8 @@
       --ok: #c3c8d4;
       --ok-tlo: rgba(195, 200, 212, .12);
       --cien: none;
+      --plus: #4ac26b;
+      --minus: #ff7b84;
     }
   }
   * { box-sizing: border-box; }
@@ -94,7 +98,7 @@
   }
   .odznaka small { display: block; color: var(--szary); font-size: 11px; margin-top: 3px; }
   .cena { margin: 10px 0 6px; font-size: 22px; font-weight: 700; }
-  .cena span { font-size: 13px; color: var(--szary); font-weight: 600; margin-left: 4px; }
+  .cena .waluta { font-size: 13px; color: var(--szary); font-weight: 600; margin-left: 4px; }
   .pasek { height: 6px; border-radius: 3px; background: var(--linia); overflow: hidden; }
   .pasek i { display: block; height: 100%; border-radius: 3px; background: var(--kolor); }
   .szczyty { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
@@ -134,6 +138,33 @@
     display: block; margin-top: 12px; padding: 10px; border-radius: 10px; text-align: center;
     background: var(--akcent-tlo); color: var(--akcent); font-weight: 600; text-decoration: none;
   }
+  /* Zmiana dzienna */
+  .wzrost { color: var(--plus); }
+  .spadek { color: var(--minus); }
+  .dzis { font-size: 14px; font-weight: 700; margin-left: 10px; }
+
+  /* Pasek rynku */
+  .rynek { display: flex; gap: 8px; overflow-x: auto; margin: 0 -12px 14px; padding: 0 12px 2px; scrollbar-width: none; }
+  .rynek::-webkit-scrollbar { display: none; }
+  .kafel { flex-shrink: 0; background: var(--karta); border-radius: 12px; padding: 8px 12px; box-shadow: var(--cien); min-width: 104px; }
+  .kafel small { display: block; font-size: 11.5px; color: var(--szary); font-weight: 600; }
+  .kafel b { display: block; font-size: 15px; margin: 1px 0; }
+  .kafel span { font-size: 12px; font-weight: 700; }
+
+  /* Sortowanie i sektory */
+  .sterowanie { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 8px; scrollbar-width: none; align-items: center; }
+  .sterowanie::-webkit-scrollbar { display: none; }
+  .sterowanie label { font-size: 12px; color: var(--szary); flex-shrink: 0; margin-right: 2px; }
+  .filtr {
+    all: unset; cursor: pointer; flex-shrink: 0; padding: 6px 12px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; background: var(--karta); color: var(--tekst);
+    box-shadow: inset 0 0 0 1px var(--linia);
+  }
+  .filtr span { color: var(--szary); font-weight: 500; margin-left: 4px; }
+  .filtr.wlaczony { background: var(--tekst); color: var(--karta); box-shadow: none; }
+  .filtr.wlaczony span { color: inherit; opacity: .7; }
+  .sektor { font-size: 11.5px; color: var(--szary); margin-left: 6px; }
+
   .stopka { color: var(--szary); font-size: 12px; margin-top: 18px; text-align: center; }
 </style>
 </head>
@@ -145,9 +176,12 @@
     <a href="index.html" class="aktywna">Notowania</a>
     <a href="newsy.html">Newsy</a>
   </nav>
+  <div class="rynek liczby" id="rynek"></div>
   <div class="podsumowanie" id="podsumowanie"></div>
+  <div class="sterowanie" id="sortowanie"></div>
+  <div class="sterowanie" id="sektory" style="margin-bottom:14px"></div>
   <div class="lista" id="lista"></div>
-  <div class="stopka">Dotknij spółki, aby zobaczyć wykres. Pasek = obecna cena jako część szczytu z ostatnich dni (pełny pasek = na szczycie).<br> Dane: Yahoo Finance (ceny zamknięcia).</div>
+  <div class="stopka">Dotknij spółki, aby zobaczyć wykres. Pasek = obecna cena jako część szczytu z ostatnich dni (pełny pasek = na szczycie).<br> Dane: Yahoo Finance (ceny zamknięcia; „dziś” = zmiana względem poprzedniego zamknięcia). Uran = Sprott Physical Uranium Trust (podąża za ceną spot).</div>
 </main>
 
 <dialog id="okno">
@@ -201,32 +235,87 @@ document.getElementById("podsumowanie").innerHTML =
   '<span class="chip zolty">' + ile.zolty + " · spadek &gt; " + DANE.prog_zolty + "%</span>" +
   '<span class="chip ok">' + ile.ok + " · blisko szczytu</span>";
 
+// ---------- pasek rynku ----------
+function dzisHTML(x) {
+  const klasa = x > 0.005 ? "wzrost" : x < -0.005 ? "spadek" : "";
+  const strzalka = x > 0.005 ? "▲ " : x < -0.005 ? "▼ " : "";
+  return '<span class="' + klasa + '">' + strzalka + procent(x) + "</span>";
+}
+document.getElementById("rynek").innerHTML = (DANE.rynek || []).map(r =>
+  '<div class="kafel"><small>' + esc(r.nazwa) + "</small><b>" + kwota(r.cena) +
+  (r.jednostka ? ' <small style="display:inline">' + esc(r.jednostka) + "</small>" : "") + "</b>" + dzisHTML(r.dzien) + "</div>"
+).join("");
+
+// ---------- sortowanie i sektory (wybór zapamiętany w telefonie) ----------
+function zapamietaj(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function odczytaj(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+const SORTOWANIA = {
+  szczyt: ["Od szczytu " + DANE.dni + "d", (a, b) => a.od_lokalnego - b.od_lokalnego],
+  ath:    ["Od ATH", (a, b) => a.od_ath - b.od_ath],
+  dzis:   ["Dziś", (a, b) => a.dzien - b.dzien],
+  nazwa:  ["A–Z", (a, b) => a.nazwa.localeCompare(b.nazwa, "pl")],
+};
+let sortowanie = odczytaj("sortowanie") || "szczyt";
+if (!SORTOWANIA[sortowanie]) sortowanie = "szczyt";
+let sektor = odczytaj("sektor") || "Wszystkie";
+if (sektor !== "Wszystkie" && !DANE.sektory.includes(sektor)) sektor = "Wszystkie";
+
+function rysujSterowanie() {
+  document.getElementById("sortowanie").innerHTML = "<label>Sortuj:</label>" +
+    Object.entries(SORTOWANIA).map(([k, [opis]]) =>
+      '<button class="filtr' + (k === sortowanie ? " wlaczony" : "") + '" data-sort="' + k + '">' + opis + "</button>").join("");
+  document.getElementById("sektory").innerHTML = ["Wszystkie"].concat(DANE.sektory).map(nazwa => {
+    const ile = nazwa === "Wszystkie" ? DANE.spolki.length : DANE.spolki.filter(s => s.sektor === nazwa).length;
+    return '<button class="filtr' + (nazwa === sektor ? " wlaczony" : "") + '" data-sektor="' + esc(nazwa) + '">' +
+      esc(nazwa) + "<span>" + ile + "</span></button>";
+  }).join("");
+}
+
 // ---------- karty ----------
 const lista = document.getElementById("lista");
-DANE.spolki.forEach((s, i) => {
-  const st = status(s.od_lokalnego);
-  const stAth = status(s.od_ath);
-  const wypelnienie = Math.max(0, Math.min(100, (s.cena / s.szczyt) * 100));
-  const karta = document.createElement("button");
-  karta.className = "karta " + st;
-  karta.innerHTML =
-    '<div class="gora">' +
-      "<div>" +
-        '<div class="nazwa">' + esc(s.nazwa) + '<span class="ikona">📈</span></div>' +
-        '<span class="ticker">' + esc(s.ticker) + "</span>" +
+function rysujListe() {
+  lista.innerHTML = "";
+  const widoczne = DANE.spolki
+    .map((s, i) => ({ s, i }))   // i = pozycja w danych (potrzebna do okienka z wykresem)
+    .filter(({ s }) => sektor === "Wszystkie" || s.sektor === sektor)
+    .sort((a, b) => SORTOWANIA[sortowanie][1](a.s, b.s));
+  widoczne.forEach(({ s, i }) => {
+    const st = status(s.od_lokalnego);
+    const stAth = status(s.od_ath);
+    const wypelnienie = Math.max(0, Math.min(100, (s.cena / s.szczyt) * 100));
+    const karta = document.createElement("button");
+    karta.className = "karta " + st;
+    karta.innerHTML =
+      '<div class="gora">' +
+        "<div>" +
+          '<div class="nazwa">' + esc(s.nazwa) + '<span class="ikona">📈</span></div>' +
+          '<span class="ticker">' + esc(s.ticker) + "</span>" +
+          (sektor === "Wszystkie" ? '<span class="sektor">' + esc(s.sektor) + "</span>" : "") +
+        "</div>" +
+        '<div class="odznaka liczby"><b>' + procent(s.od_lokalnego) + "</b><small>od szczytu " + DANE.dni + "d</small></div>" +
       "</div>" +
-      '<div class="odznaka liczby"><b>' + procent(s.od_lokalnego) + "</b><small>od szczytu " + DANE.dni + "d</small></div>" +
-    "</div>" +
-    '<div class="cena liczby">' + kwota(s.cena) + "<span>" + esc(s.waluta) + "</span></div>" +
-    '<div class="pasek" title="cena jako % szczytu ' + DANE.dni + 'd"><i style="width:' + wypelnienie + '%"></i></div>' +
-    '<div class="szczyty liczby">' +
-      "<div>Szczyt " + DANE.dni + "d<strong>" + kwota(s.szczyt) + " " + esc(s.waluta) + "</strong>" + s.data_szczytu + "</div>" +
-      '<div class="' + stAth + '">ATH <span class="procent">' + procent(s.od_ath) + "</span><strong>" +
-        kwota(s.ath) + " " + esc(s.waluta) + "</strong>" + s.data_ath + "</div>" +
-    "</div>";
-  karta.addEventListener("click", () => otworz(i));
-  lista.appendChild(karta);
+      '<div class="cena liczby">' + kwota(s.cena) + '<span class="waluta">' + esc(s.waluta) + "</span>" +
+        '<span class="dzis">' + dzisHTML(s.dzien) + ' <small style="color:var(--szary);font-weight:500">dziś</small></span></div>' +
+      '<div class="pasek" title="cena jako % szczytu ' + DANE.dni + 'd"><i style="width:' + wypelnienie + '%"></i></div>' +
+      '<div class="szczyty liczby">' +
+        "<div>Szczyt " + DANE.dni + "d<strong>" + kwota(s.szczyt) + " " + esc(s.waluta) + "</strong>" + s.data_szczytu + "</div>" +
+        '<div class="' + stAth + '">ATH <span class="procent">' + procent(s.od_ath) + "</span><strong>" +
+          kwota(s.ath) + " " + esc(s.waluta) + "</strong>" + s.data_ath + "</div>" +
+      "</div>";
+    karta.addEventListener("click", () => otworz(i));
+    lista.appendChild(karta);
+  });
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-sort], [data-sektor]");
+  if (!b) return;
+  if (b.dataset.sort) { sortowanie = b.dataset.sort; zapamietaj("sortowanie", sortowanie); }
+  if (b.dataset.sektor) { sektor = b.dataset.sektor; zapamietaj("sektor", sektor); }
+  rysujSterowanie(); rysujListe();
 });
+rysujSterowanie();
+rysujListe();
 
 // ---------- okienko z wykresem ----------
 const okno = document.getElementById("okno");

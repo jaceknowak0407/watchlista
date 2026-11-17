@@ -7,6 +7,8 @@ Ze stroną WWW: .venv/bin/python watchlista.py --html _site/index.html
 import argparse
 import json
 import logging
+import os
+import urllib.request
 import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -25,11 +27,30 @@ from rich.table import Table
 LOKALNY_OKRES_DNI = 90   # "lokalny szczyt" = najwyższe zamknięcie z ostatnich N dni
 PROG_CZERWONY = 20       # spadek większy niż tyle % -> kolor czerwony
 PROG_ZOLTY = 10          # spadek większy niż tyle % -> kolor żółty
+PROG_DZIEN = 5           # powiadomienie, gdy spółka zmieni się w ciągu dnia o więcej niż tyle %
+
+# Pasek rynku na górze strony: (nazwa, ticker w Yahoo, jednostka).
+# Yahoo nie ma ceny spot uranu — Sprott Physical Uranium Trust (SRUUF) trzyma fizyczny uran i podąża za spotem.
+RYNEK = [
+    ("Uran (SPUT)", "SRUUF", "USD"),
+    ("Złoto", "GC=F", "USD/oz"),
+    ("Srebro", "SI=F", "USD/oz"),
+    ("Ropa Brent", "BZ=F", "USD/bbl"),
+    ("Miedź", "HG=F", "USD/lb"),
+    ("USD/PLN", "USDPLN=X", ""),
+    ("GBP/PLN", "GBPPLN=X", ""),
+]
+
+# Powiadomienia na telefon przez ntfy.sh. Nazwa kanału NIE jest w kodzie: skrypt bierze ją
+# ze zmiennej środowiskowej NTFY_TOPIC (na GitHubie: sekret repozytorium). Bez niej — brak powiadomień.
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
+ADRES_STRONY = "https://jaceknowak0407.github.io/watchlista/"   # link w powiadomieniu
 
 # Pliki leżą obok skryptu, więc skrypt działa z dowolnego katalogu.
 FOLDER = Path(__file__).parent
 PLIK_SPOLEK = FOLDER / "spolki.txt"
 PLIK_SZABLONU = FOLDER / "szablon.html"   # wygląd strony WWW
+STREFA = ZoneInfo("Europe/Warsaw")
 
 console = Console()
 
@@ -37,21 +58,36 @@ console = Console()
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 
-def wczytaj_spolki(sciezka):
-    """Czyta plik spolki.txt i zwraca listę par (ticker, nazwa)."""
+# ---------------------------------------------------------------
+# Lista spółek
+# ---------------------------------------------------------------
+def wczytaj_spolki_z_sektorami(sciezka):
+    """Czyta spolki.txt i zwraca listę trójek (ticker, nazwa, sektor)."""
     spolki = []
+    sektor = "Inne"
     for linia in sciezka.read_text(encoding="utf-8").splitlines():
         linia = linia.strip()
+        if linia.startswith("##"):
+            sektor = linia.lstrip("#").strip() or "Inne"   # nagłówek sektora
+            continue
         if not linia or linia.startswith("#"):
             continue  # pomijamy puste linie i komentarze
         ticker, _, nazwa = linia.partition("#")
         ticker = ticker.strip()
         # Tekst w nawiasie, np. "(cena w pensach GBp)", to tylko notatka — nie pokazujemy go w tabeli.
         nazwa = nazwa.split("(")[0].strip() or ticker
-        spolki.append((ticker, nazwa))
+        spolki.append((ticker, nazwa, sektor))
     return spolki
 
 
+def wczytaj_spolki(sciezka):
+    """Jak wyżej, ale tylko pary (ticker, nazwa) — używane przez newsy.py."""
+    return [(t, n) for t, n, _ in wczytaj_spolki_z_sektorami(sciezka)]
+
+
+# ---------------------------------------------------------------
+# Notowania
+# ---------------------------------------------------------------
 def pobierz_dane(ticker):
     """Pobiera historię notowań i liczy wskaźniki. Zwraca słownik albo None."""
     t = yf.Ticker(ticker)
@@ -73,6 +109,8 @@ def pobierz_dane(ticker):
         waluta = "GBP"
 
     cena = float(zamkniecia.iloc[-1])
+    # Zmiana dzienna = ostatnie zamknięcie (lub bieżąca cena w trakcie sesji) vs poprzednie zamknięcie.
+    poprzednia = float(zamkniecia.iloc[-2]) if len(zamkniecia) > 1 else cena
 
     # ATH = najwyższe zamknięcie w całej historii (i dzień, w którym padło).
     ath = float(zamkniecia.max())
@@ -87,6 +125,8 @@ def pobierz_dane(ticker):
     return {
         "waluta": waluta,
         "cena": cena,
+        "dzien": (cena / poprzednia - 1) * 100,
+        "data_ceny": zamkniecia.index[-1].strftime("%d.%m.%Y"),
         "ath": ath,
         "data_ath": data_ath.strftime("%d.%m.%Y"),
         "szczyt": szczyt,
@@ -96,6 +136,22 @@ def pobierz_dane(ticker):
         # Notowania z ostatnich N dni — do wykresu na stronie: [data, cena].
         "wykres": [[d.strftime("%Y-%m-%d"), round(float(v), 4)] for d, v in ostatnie.items()],
     }
+
+
+def pobierz_rynek():
+    """Ceny surowców i kursów walut do paska na górze strony."""
+    wynik = []
+    for nazwa, ticker, jednostka in RYNEK:
+        try:
+            zamkniecia = yf.Ticker(ticker).history(period="5d")["Close"].dropna()
+            if len(zamkniecia) < 2:
+                raise ValueError("za mało danych")
+            cena, poprzednia = float(zamkniecia.iloc[-1]), float(zamkniecia.iloc[-2])
+            wynik.append({"nazwa": nazwa, "ticker": ticker, "jednostka": jednostka,
+                          "cena": cena, "dzien": (cena / poprzednia - 1) * 100})
+        except Exception:
+            console.print(f"[yellow]⚠ Pasek rynku: brak danych dla {nazwa} ({ticker})[/yellow]")
+    return wynik
 
 
 def pokoloruj(procent):
@@ -110,11 +166,11 @@ def pokoloruj(procent):
 
 def zbierz_wyniki():
     """Pobiera dane dla wszystkich spółek z pliku i zwraca je posortowane."""
-    spolki = wczytaj_spolki(PLIK_SPOLEK)
+    spolki = wczytaj_spolki_z_sektorami(PLIK_SPOLEK)
     wyniki = []
 
     with console.status("Pobieram dane z Yahoo Finance...") as status:
-        for ticker, nazwa in spolki:
+        for ticker, nazwa, sektor in spolki:
             status.update(f"Pobieram {ticker}...")
             try:
                 dane = pobierz_dane(ticker)
@@ -124,7 +180,7 @@ def zbierz_wyniki():
             if dane is None:
                 console.print(f"[yellow]⚠ {ticker} ({nazwa}): brak danych — pomijam[/yellow]")
                 continue
-            wyniki.append({"nazwa": nazwa, "ticker": ticker, **dane})
+            wyniki.append({"nazwa": nazwa, "ticker": ticker, "sektor": sektor, **dane})
 
     # Największy spadek od lokalnego szczytu na górze.
     wyniki.sort(key=lambda w: w["od_lokalnego"])
@@ -138,6 +194,7 @@ def pokaz_w_terminalu(wyniki):
     tabela.add_column("Ticker", style="cyan")
     tabela.add_column("Waluta")
     tabela.add_column("Cena", justify="right", style="bold")
+    tabela.add_column("Dziś", justify="right")
     tabela.add_column(f"Szczyt {LOKALNY_OKRES_DNI}d", justify="right")
     tabela.add_column("Data szczytu", justify="right", style="dim")
     tabela.add_column("ATH", justify="right")
@@ -146,11 +203,13 @@ def pokaz_w_terminalu(wyniki):
     tabela.add_column(f"% od szczytu {LOKALNY_OKRES_DNI}d", justify="right")
 
     for w in wyniki:
+        kolor_dnia = "green" if w["dzien"] > 0 else "red" if w["dzien"] < 0 else "white"
         tabela.add_row(
             w["nazwa"],
             w["ticker"],
             w["waluta"],
             f"{w['cena']:,.2f}",
+            f"[{kolor_dnia}]{w['dzien']:+.2f}%[/{kolor_dnia}]",
             f"{w['szczyt']:,.2f}",
             w["data_szczytu"],
             f"{w['ath']:,.2f}",
@@ -162,14 +221,101 @@ def pokaz_w_terminalu(wyniki):
     console.print(tabela)
 
 
-def zapisz_html(wyniki, sciezka):
+# ---------------------------------------------------------------
+# Powiadomienia (ntfy.sh)
+# ---------------------------------------------------------------
+def strefa(procent):
+    """0 = blisko szczytu, 1 = żółta strefa, 2 = czerwona strefa."""
+    if procent < -PROG_CZERWONY:
+        return 2
+    if procent < -PROG_ZOLTY:
+        return 1
+    return 0
+
+
+def wczytaj_poprzednie_dane(sciezka):
+    """Czyta dane z poprzednio opublikowanej strony (do porównania, co się zmieniło)."""
+    try:
+        tekst = Path(sciezka).read_text(encoding="utf-8")
+        return json.loads(tekst.split("const DANE = ", 1)[1].split(";\n", 1)[0].replace("<\\/", "</"))
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def sprawdz_alerty(wyniki, poprzednie):
+    """Porównuje obecne dane z poprzednimi. Zwraca (lista komunikatów, stan do zapamiętania)."""
+    dzis = datetime.now(STREFA).strftime("%Y-%m-%d")
+    stary_stan = (poprzednie or {}).get("alerty") or {}
+    wyslane_dzis = set(stary_stan.get("wyslane", [])) if stary_stan.get("data") == dzis else set()
+
+    if not poprzednie or "spolki" not in poprzednie:
+        # Pierwsze uruchomienie: nie ma z czym porównać — tylko zapamiętujemy stan (bez zalewu powiadomień).
+        return [], {"data": dzis, "wyslane": sorted(wyslane_dzis)}
+
+    stare = {s["ticker"]: s for s in poprzednie["spolki"]}
+    komunikaty = []
+    for w in wyniki:
+        t = w["ticker"]
+        # 1) Spółka weszła w gorszą strefę spadku od szczytu 90d.
+        if t in stare and strefa(w["od_lokalnego"]) > strefa(stare[t]["od_lokalnego"]):
+            prog = PROG_CZERWONY if strefa(w["od_lokalnego"]) == 2 else PROG_ZOLTY
+            ikona = "🔴" if prog == PROG_CZERWONY else "🟡"
+            komunikaty.append(f"{ikona} {w['nazwa']} ({t}): spadek > {prog}% od szczytu "
+                              f"{LOKALNY_OKRES_DNI}d ({w['od_lokalnego']:+.1f}%)")
+        # 2) Duży ruch w ciągu dnia — najwyżej raz dziennie na spółkę.
+        if abs(w["dzien"]) >= PROG_DZIEN and f"{t}:dzien" not in wyslane_dzis:
+            ikona = "📈" if w["dzien"] > 0 else "📉"
+            komunikaty.append(f"{ikona} {w['nazwa']} ({t}): {w['dzien']:+.1f}% dziś, "
+                              f"cena {w['cena']:,.2f} {w['waluta']}")
+            wyslane_dzis.add(f"{t}:dzien")
+    return komunikaty, {"data": dzis, "wyslane": sorted(wyslane_dzis)}
+
+
+def wyslij_powiadomienie(komunikaty):
+    """Wysyła jedno zbiorcze powiadomienie na telefon przez ntfy.sh."""
+    if not komunikaty:
+        console.print("Powiadomienia: brak nowych alertów")
+        return
+    console.print(f"Powiadomienia: {len(komunikaty)} alert(y):")
+    for k in komunikaty:
+        console.print("  " + k)
+    if not NTFY_TOPIC:
+        console.print("[yellow]⚠ Brak NTFY_TOPIC — nie wysyłam na telefon.[/yellow]")
+        return
+    tresc = json.dumps({
+        "topic": NTFY_TOPIC,
+        "title": f"Watchlista: {len(komunikaty)} alert(y)",
+        "message": "\n".join(komunikaty),
+        "click": ADRES_STRONY,
+        "tags": ["chart_with_downwards_trend"],
+    }).encode("utf-8")
+    zapytanie = urllib.request.Request("https://ntfy.sh/", data=tresc, method="POST",
+                                       headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(zapytanie, timeout=20).close()
+        console.print("Wysłano powiadomienie na telefon.")
+    except Exception as blad:
+        console.print(f"[yellow]⚠ Nie udało się wysłać powiadomienia ({blad})[/yellow]")
+
+
+# ---------------------------------------------------------------
+# Strona WWW
+# ---------------------------------------------------------------
+def zapisz_html(wyniki, rynek, alerty, sciezka):
     """Wkłada dane do szablonu strony (szablon.html) i zapisuje gotową stronę."""
+    sektory = []
+    for _, _, sektor in wczytaj_spolki_z_sektorami(PLIK_SPOLEK):
+        if sektor not in sektory:
+            sektory.append(sektor)   # kolejność jak w spolki.txt
     dane = {
-        "aktualizacja": datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y %H:%M"),
+        "aktualizacja": datetime.now(STREFA).strftime("%d.%m.%Y %H:%M"),
         "dni": LOKALNY_OKRES_DNI,
         "prog_czerwony": PROG_CZERWONY,
         "prog_zolty": PROG_ZOLTY,
+        "sektory": sektory,
+        "rynek": rynek,
         "spolki": wyniki,
+        "alerty": alerty,   # pamięć wysłanych powiadomień (dla kolejnego uruchomienia)
     }
     # "<\/" zamiast "</" — żeby tekst z danych nie mógł przypadkiem zamknąć znacznika <script>.
     dane_json = json.dumps(dane, ensure_ascii=False).replace("</", "<\\/")
@@ -189,7 +335,11 @@ def main():
     wyniki = zbierz_wyniki()
     pokaz_w_terminalu(wyniki)
     if argumenty.html:
-        zapisz_html(wyniki, argumenty.html)
+        # Poprzednia wersja strony (jeśli istnieje) służy do wykrycia zmian -> powiadomienia.
+        poprzednie = wczytaj_poprzednie_dane(argumenty.html)
+        komunikaty, alerty = sprawdz_alerty(wyniki, poprzednie)
+        wyslij_powiadomienie(komunikaty)
+        zapisz_html(wyniki, pobierz_rynek(), alerty, argumenty.html)
 
 
 if __name__ == "__main__":
