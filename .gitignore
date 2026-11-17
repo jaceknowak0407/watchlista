@@ -2,3 +2,6 @@
 __pycache__/
 .DS_Store
 _site/
+
+# Prywatne notatki (strategia, posiadane aktywa) — NIE wysyłać na GitHuba
+CLAUDE.local.md

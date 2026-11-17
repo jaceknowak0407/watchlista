@@ -65,7 +65,8 @@ Co 2 godziny skrypt sprawdza, czy któraś spółka weszła w strefę spadku > 1
 darmową aplikację **ntfy**. Nazwa kanału jest zapisana na GitHubie jako sekret `NTFY_TOPIC`.
 
 ## Dostosowanie
-- **Lista spółek** — edytuj `spolki.txt`: jeden ticker w linii, po `#` nazwa; linia `## Nazwa` zaczyna sektor.
+- **Lista spółek** — edytuj `spolki.txt`: jeden ticker w linii, po `#` nazwa, po `|` sektor; linia `## GRUPA` zaczyna grupę (TRZON / SREDNIE / OKAZJE / KRYPTO).
+- **Progi grup** — `PROGI_GRUP` w `watchlista.py` (TRZON 15%, SREDNIE 25%, OKAZJE 40%, KRYPTO 30%). Aktywo, którego spadek od szczytu 90 dni przekroczy próg swojej grupy, dostaje etykietę „przyjrzyj się” i wysyłane jest powiadomienie.
   Tickery sprawdzisz na https://finance.yahoo.com (np. giełda londyńska ma końcówkę `.L`).
 - **Okres lokalnego szczytu** — w `watchlista.py` zmień `LOKALNY_OKRES_DNI = 90`.
 - **Progi kolorów** — `PROG_CZERWONY` i `PROG_ZOLTY` w tym samym miejscu.

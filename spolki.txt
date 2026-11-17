@@ -1,43 +1,38 @@
-# Lista obserwowanych spółek: jeden ticker w linii, po "#" nazwa spółki.
-# Linia zaczynająca się od "##" to nazwa sektora — dotyczy spółek pod nią.
+# Lista obserwowanych aktywów: jeden ticker w linii, po "#" nazwa, po "|" sektor.
+# Linia zaczynająca się od "##" to grupa (TRZON / SREDNIE / OKAZJE / KRYPTO) — dotyczy aktywów pod nią.
+# Progi spadku dla grup ustawiasz w watchlista.py (PROGI_GRUP).
 # Puste linie i zwykłe komentarze (jeden "#") są pomijane.
 
-## Uran
-YCA.L    # Yellow Cake plc (cena w pensach GBp)
-NXE      # NexGen Energy
-UUUU     # Energy Fuels
-EU       # enCore Energy
-CCJ      # Cameco
-URA      # Global X Uranium ETF
-UEC      # Uranium Energy
-URNM     # Sprott Uranium Miners ETF
-URNJ     # Sprott Junior Uranium Miners ETF
+## TRZON
+RIO      # Rio Tinto                         | Miedź i surowce
+BHP      # BHP Group                         | Miedź i surowce
+SCCO     # Southern Copper                   | Miedź i surowce
+FCX      # Freeport-McMoRan                  | Miedź i surowce
+CVX      # Chevron                           | Ropa i gaz
+XOM      # Exxon Mobil                       | Ropa i gaz
+MO       # Altria                            | Tytoń
+BTI      # British American Tobacco          | Tytoń
+BLK      # BlackRock                         | Finanse
+AEM      # Agnico Eagle                      | Złoto i srebro
+FNV      # Franco-Nevada                     | Złoto i srebro
+WPM      # Wheaton Precious Metals           | Złoto i srebro
+CCJ      # Cameco                            | Uran
+URA      # Global X Uranium ETF              | Uran
+URNM     # Sprott Uranium Miners ETF         | Uran
+URNJ     # Sprott Junior Uranium Miners ETF  | Uran
+YCA.L    # Yellow Cake plc (cena w pensach GBp) | Uran
 
-## Złoto i srebro
-AEM      # Agnico Eagle
-PAAS     # Pan American Silver
-WPM      # Wheaton Precious Metals
-SBSW     # Sibanye-Stillwater
-FNV      # Franco-Nevada
+## SREDNIE
+PBR      # Petrobras                         | Ropa i gaz
+EC       # Ecopetrol                         | Ropa i gaz
+PAAS     # Pan American Silver               | Złoto i srebro
 
-## Miedź i surowce
-RIO      # Rio Tinto
-FCX      # Freeport-McMoRan
-SCCO     # Southern Copper
-BHP      # BHP Group
+## OKAZJE
+NXE      # NexGen Energy                     | Uran
+UUUU     # Energy Fuels                      | Uran
+EU       # enCore Energy                     | Uran
+SBSW     # Sibanye-Stillwater                | Złoto i srebro
 
-## Ropa i gaz
-CVX      # Chevron
-XOM      # Exxon Mobil
-EC       # Ecopetrol
-PBR      # Petrobras
-
-## Tytoń
-MO       # Altria
-BTI      # British American Tobacco
-
-## Finanse
-BLK      # BlackRock
-
-## Krypto
-BTC-USD  # Bitcoin
+## KRYPTO
+BTC-USD  # Bitcoin                           | Krypto
+ETH-USD  # Ethereum                          | Krypto

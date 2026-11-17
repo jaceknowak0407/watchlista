@@ -25,8 +25,17 @@ from rich.table import Table
 # USTAWIENIA — możesz je swobodnie zmieniać
 # ---------------------------------------------------------------
 LOKALNY_OKRES_DNI = 90   # "lokalny szczyt" = najwyższe zamknięcie z ostatnich N dni
-PROG_CZERWONY = 20       # spadek większy niż tyle % -> kolor czerwony
-PROG_ZOLTY = 10          # spadek większy niż tyle % -> kolor żółty
+
+# Grupy aktywów (jak w spolki.txt, linie "## GRUPA") i ich progi spadku od lokalnego szczytu (w %).
+# Przekroczenie progu = etykieta "przyjrzyj się" (kolor czerwony) i powiadomienie na telefon.
+PROGI_GRUP = {
+    "TRZON": 15,     # duże, stabilne spółki i ETF-y
+    "SREDNIE": 25,
+    "OKAZJE": 40,    # mniejsze spółki, kupowane okazyjnie
+    "KRYPTO": 30,
+}
+NAZWY_GRUP = {"TRZON": "Trzon", "SREDNIE": "Średnie", "OKAZJE": "Okazje", "KRYPTO": "Krypto"}
+ZOLTY_OD = 0.5           # kolor żółty od połowy progu grupy (np. TRZON: spadek > 7,5%)
 PROG_DZIEN = 5           # powiadomienie, gdy spółka zmieni się w ciągu dnia o więcej niż tyle %
 
 # Pasek rynku na górze strony: (nazwa, ticker w Yahoo, jednostka).
@@ -61,28 +70,45 @@ logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 # ---------------------------------------------------------------
 # Lista spółek
 # ---------------------------------------------------------------
-def wczytaj_spolki_z_sektorami(sciezka):
-    """Czyta spolki.txt i zwraca listę trójek (ticker, nazwa, sektor)."""
-    spolki = []
-    sektor = "Inne"
+def wczytaj_aktywa(sciezka):
+    """Czyta spolki.txt i zwraca listę czwórek (ticker, nazwa, grupa, sektor)."""
+    aktywa = []
+    grupa = "TRZON"
     for linia in sciezka.read_text(encoding="utf-8").splitlines():
         linia = linia.strip()
         if linia.startswith("##"):
-            sektor = linia.lstrip("#").strip() or "Inne"   # nagłówek sektora
+            grupa = linia.lstrip("#").strip().upper()   # nagłówek grupy, np. "## OKAZJE"
+            if grupa not in PROGI_GRUP:
+                console.print(f"[yellow]⚠ Nieznana grupa „{grupa}” w spolki.txt — dodaj ją do PROGI_GRUP[/yellow]")
             continue
         if not linia or linia.startswith("#"):
             continue  # pomijamy puste linie i komentarze
-        ticker, _, nazwa = linia.partition("#")
+        ticker, _, reszta = linia.partition("#")
+        nazwa, _, sektor = reszta.partition("|")
         ticker = ticker.strip()
         # Tekst w nawiasie, np. "(cena w pensach GBp)", to tylko notatka — nie pokazujemy go w tabeli.
         nazwa = nazwa.split("(")[0].strip() or ticker
-        spolki.append((ticker, nazwa, sektor))
-    return spolki
+        aktywa.append((ticker, nazwa, grupa, sektor.strip() or "Inne"))
+    return aktywa
 
 
 def wczytaj_spolki(sciezka):
-    """Jak wyżej, ale tylko pary (ticker, nazwa) — używane przez newsy.py."""
-    return [(t, n) for t, n, _ in wczytaj_spolki_z_sektorami(sciezka)]
+    """Same pary (ticker, nazwa) — używane przez newsy.py."""
+    return [(t, n) for t, n, _, _ in wczytaj_aktywa(sciezka)]
+
+
+def prog_grupy(grupa):
+    return PROGI_GRUP.get(grupa, 20)   # 20% dla grupy spoza listy
+
+
+def strefa(procent, grupa):
+    """0 = spokojnie, 1 = zbliża się do progu (żółty), 2 = próg przekroczony (czerwony, "przyjrzyj się")."""
+    prog = prog_grupy(grupa)
+    if procent < -prog:
+        return 2
+    if procent < -prog * ZOLTY_OD:
+        return 1
+    return 0
 
 
 # ---------------------------------------------------------------
@@ -154,23 +180,20 @@ def pobierz_rynek():
     return wynik
 
 
-def pokoloruj(procent):
-    """Zwraca tekst procentu z kolorem zależnym od wielkości spadku."""
+def pokoloruj(procent, grupa):
+    """Zwraca tekst procentu z kolorem zależnym od progu grupy."""
     tekst = f"{procent:+.2f}%"
-    if procent < -PROG_CZERWONY:
-        return f"[red]{tekst}[/red]"
-    if procent < -PROG_ZOLTY:
-        return f"[yellow]{tekst}[/yellow]"
-    return tekst
+    kolor = {2: "red", 1: "yellow"}.get(strefa(procent, grupa))
+    return f"[{kolor}]{tekst}[/{kolor}]" if kolor else tekst
 
 
 def zbierz_wyniki():
     """Pobiera dane dla wszystkich spółek z pliku i zwraca je posortowane."""
-    spolki = wczytaj_spolki_z_sektorami(PLIK_SPOLEK)
+    aktywa = wczytaj_aktywa(PLIK_SPOLEK)
     wyniki = []
 
     with console.status("Pobieram dane z Yahoo Finance...") as status:
-        for ticker, nazwa, sektor in spolki:
+        for ticker, nazwa, grupa, sektor in aktywa:
             status.update(f"Pobieram {ticker}...")
             try:
                 dane = pobierz_dane(ticker)
@@ -180,16 +203,21 @@ def zbierz_wyniki():
             if dane is None:
                 console.print(f"[yellow]⚠ {ticker} ({nazwa}): brak danych — pomijam[/yellow]")
                 continue
-            wyniki.append({"nazwa": nazwa, "ticker": ticker, "sektor": sektor, **dane})
+            wyniki.append({
+                "nazwa": nazwa, "ticker": ticker, "grupa": grupa, "sektor": sektor, **dane,
+                "przyjrzyj": strefa(dane["od_lokalnego"], grupa) == 2,   # przekroczony próg grupy
+            })
 
-    # Największy spadek od lokalnego szczytu na górze.
-    wyniki.sort(key=lambda w: w["od_lokalnego"])
+    # Kolejność grup jak w PROGI_GRUP, w grupie największy spadek od lokalnego szczytu na górze.
+    kolejnosc = list(PROGI_GRUP)
+    wyniki.sort(key=lambda w: (kolejnosc.index(w["grupa"]) if w["grupa"] in kolejnosc else 99, w["od_lokalnego"]))
     return wyniki
 
 
 def pokaz_w_terminalu(wyniki):
     """Rysuje kolorową tabelę w terminalu."""
     tabela = Table(title=f"Watchlista (lokalny szczyt = ostatnie {LOKALNY_OKRES_DNI} dni)")
+    tabela.add_column("Grupa", style="magenta")
     tabela.add_column("Nazwa", no_wrap=True)
     tabela.add_column("Ticker", style="cyan")
     tabela.add_column("Waluta")
@@ -201,10 +229,13 @@ def pokaz_w_terminalu(wyniki):
     tabela.add_column("Data ATH", justify="right", style="dim")
     tabela.add_column("% od ATH", justify="right")
     tabela.add_column(f"% od szczytu {LOKALNY_OKRES_DNI}d", justify="right")
+    tabela.add_column("Próg", justify="right", style="dim")
+    tabela.add_column("Uwaga")
 
     for w in wyniki:
         kolor_dnia = "green" if w["dzien"] > 0 else "red" if w["dzien"] < 0 else "white"
         tabela.add_row(
+            NAZWY_GRUP.get(w["grupa"], w["grupa"]),
             w["nazwa"],
             w["ticker"],
             w["waluta"],
@@ -214,8 +245,10 @@ def pokaz_w_terminalu(wyniki):
             w["data_szczytu"],
             f"{w['ath']:,.2f}",
             w["data_ath"],
-            pokoloruj(w["od_ath"]),
-            pokoloruj(w["od_lokalnego"]),
+            f"{w['od_ath']:+.2f}%",
+            pokoloruj(w["od_lokalnego"], w["grupa"]),
+            f"{prog_grupy(w['grupa'])}%",
+            "[bold red]przyjrzyj się[/bold red]" if w["przyjrzyj"] else "",
         )
 
     console.print(tabela)
@@ -224,15 +257,6 @@ def pokaz_w_terminalu(wyniki):
 # ---------------------------------------------------------------
 # Powiadomienia (ntfy.sh)
 # ---------------------------------------------------------------
-def strefa(procent):
-    """0 = blisko szczytu, 1 = żółta strefa, 2 = czerwona strefa."""
-    if procent < -PROG_CZERWONY:
-        return 2
-    if procent < -PROG_ZOLTY:
-        return 1
-    return 0
-
-
 def wczytaj_poprzednie_dane(sciezka):
     """Czyta dane z poprzednio opublikowanej strony (do porównania, co się zmieniło)."""
     try:
@@ -256,12 +280,11 @@ def sprawdz_alerty(wyniki, poprzednie):
     komunikaty = []
     for w in wyniki:
         t = w["ticker"]
-        # 1) Spółka weszła w gorszą strefę spadku od szczytu 90d.
-        if t in stare and strefa(w["od_lokalnego"]) > strefa(stare[t]["od_lokalnego"]):
-            prog = PROG_CZERWONY if strefa(w["od_lokalnego"]) == 2 else PROG_ZOLTY
-            ikona = "🔴" if prog == PROG_CZERWONY else "🟡"
-            komunikaty.append(f"{ikona} {w['nazwa']} ({t}): spadek > {prog}% od szczytu "
-                              f"{LOKALNY_OKRES_DNI}d ({w['od_lokalnego']:+.1f}%)")
+        # 1) Aktywo przekroczyło próg spadku swojej grupy -> "przyjrzyj się".
+        if t in stare and w["przyjrzyj"] and strefa(stare[t]["od_lokalnego"], w["grupa"]) < 2:
+            komunikaty.append(f"🔴 Przyjrzyj się: {w['nazwa']} ({t}, {NAZWY_GRUP.get(w['grupa'], w['grupa'])}) — "
+                              f"spadek > {prog_grupy(w['grupa'])}% od szczytu {LOKALNY_OKRES_DNI}d "
+                              f"({w['od_lokalnego']:+.1f}%)")
         # 2) Duży ruch w ciągu dnia — najwyżej raz dziennie na spółkę.
         if abs(w["dzien"]) >= PROG_DZIEN and f"{t}:dzien" not in wyslane_dzis:
             ikona = "📈" if w["dzien"] > 0 else "📉"
@@ -304,14 +327,15 @@ def wyslij_powiadomienie(komunikaty):
 def zapisz_html(wyniki, rynek, alerty, sciezka):
     """Wkłada dane do szablonu strony (szablon.html) i zapisuje gotową stronę."""
     sektory = []
-    for _, _, sektor in wczytaj_spolki_z_sektorami(PLIK_SPOLEK):
+    for _, _, _, sektor in wczytaj_aktywa(PLIK_SPOLEK):
         if sektor not in sektory:
             sektory.append(sektor)   # kolejność jak w spolki.txt
     dane = {
         "aktualizacja": datetime.now(STREFA).strftime("%d.%m.%Y %H:%M"),
         "dni": LOKALNY_OKRES_DNI,
-        "prog_czerwony": PROG_CZERWONY,
-        "prog_zolty": PROG_ZOLTY,
+        # Grupy z progami — w kolejności sekcji na stronie.
+        "grupy": [{"id": g, "nazwa": NAZWY_GRUP.get(g, g), "prog": p} for g, p in PROGI_GRUP.items()],
+        "zolty_od": ZOLTY_OD,
         "sektory": sektory,
         "rynek": rynek,
         "spolki": wyniki,

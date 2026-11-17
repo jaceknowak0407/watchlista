@@ -163,6 +163,18 @@
   .filtr span { color: var(--szary); font-weight: 500; margin-left: 4px; }
   .filtr.wlaczony { background: var(--tekst); color: var(--karta); box-shadow: none; }
   .filtr.wlaczony span { color: inherit; opacity: .7; }
+  /* Sekcje grup i etykieta "przyjrzyj się" */
+  .sekcja { grid-column: 1 / -1; margin: 10px 2px 0; }
+  .sekcja:first-child { margin-top: 0; }
+  .sekcja h2 { margin: 0; font-size: 19px; }
+  .sekcja h2 span { font-size: 14px; color: var(--szary); font-weight: 600; }
+  .sekcja small { display: block; font-size: 12.5px; color: var(--szary); margin-top: 1px; }
+  .sekcja .czerwony { color: var(--czerwony); }
+  .przyjrzyj {
+    display: table; margin-top: 6px; padding: 3px 9px; border-radius: 999px;
+    background: var(--czerwony); color: #fff; font-size: 12px; font-weight: 700;
+  }
+  @media (prefers-color-scheme: dark) { .przyjrzyj { color: #1a1c22; } }
   .sektor { font-size: 11.5px; color: var(--szary); margin-left: 6px; }
 
   .stopka { color: var(--szary); font-size: 12px; margin-top: 18px; text-align: center; }
@@ -181,7 +193,7 @@
   <div class="sterowanie" id="sortowanie"></div>
   <div class="sterowanie" id="sektory" style="margin-bottom:14px"></div>
   <div class="lista" id="lista"></div>
-  <div class="stopka">Dotknij spółki, aby zobaczyć wykres. Pasek = obecna cena jako część szczytu z ostatnich dni (pełny pasek = na szczycie).<br> Dane: Yahoo Finance (ceny zamknięcia; „dziś” = zmiana względem poprzedniego zamknięcia). Uran = Sprott Physical Uranium Trust (podąża za ceną spot).</div>
+  <div class="stopka">Kolor karty: czerwony = spadek od lokalnego szczytu większy niż próg grupy („przyjrzyj się”), żółty = ponad połowa progu.<br>Dotknij spółki, aby zobaczyć wykres. Pasek = obecna cena jako część szczytu z ostatnich dni (pełny pasek = na szczycie).<br> Dane: Yahoo Finance (ceny zamknięcia; „dziś” = zmiana względem poprzedniego zamknięcia). Uran = Sprott Physical Uranium Trust (podąża za ceną spot).</div>
 </main>
 
 <dialog id="okno">
@@ -211,9 +223,15 @@ function procent(x) {
   const t = Math.abs(x).toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return (x > 0.05 ? "+" : x < -0.05 ? "−" : "") + t + "%";
 }
-function status(x) {
-  if (x < -DANE.prog_czerwony) return "czerwony";
-  if (x < -DANE.prog_zolty) return "zolty";
+// Próg spadku od szczytu zależy od grupy (TRZON 15%, SREDNIE 25%...) — ustawiany w watchlista.py.
+function progGrupy(id) {
+  const g = DANE.grupy.find(g => g.id === id);
+  return g ? g.prog : 20;
+}
+function status(x, grupa) {
+  const prog = progGrupy(grupa);
+  if (x < -prog) return "czerwony";                    // próg przekroczony -> "przyjrzyj się"
+  if (x < -prog * DANE.zolty_od) return "zolty";       // zbliża się do progu
   return "ok";
 }
 function dataPL(iso) {            // "2026-11-14" -> "14.11.2026"
@@ -229,11 +247,11 @@ document.getElementById("podtytul").textContent =
   "Aktualizacja: " + DANE.aktualizacja + " · szczyt lokalny = ostatnie " + DANE.dni + " dni";
 
 const ile = { czerwony: 0, zolty: 0, ok: 0 };
-DANE.spolki.forEach(s => ile[status(s.od_lokalnego)]++);
+DANE.spolki.forEach(s => ile[status(s.od_lokalnego, s.grupa)]++);
 document.getElementById("podsumowanie").innerHTML =
-  '<span class="chip czerwony">' + ile.czerwony + " · spadek &gt; " + DANE.prog_czerwony + "%</span>" +
-  '<span class="chip zolty">' + ile.zolty + " · spadek &gt; " + DANE.prog_zolty + "%</span>" +
-  '<span class="chip ok">' + ile.ok + " · blisko szczytu</span>";
+  '<span class="chip czerwony">' + ile.czerwony + " · przyjrzyj się</span>" +
+  '<span class="chip zolty">' + ile.zolty + " · blisko progu</span>" +
+  '<span class="chip ok">' + ile.ok + " · spokojnie</span>";
 
 // ---------- pasek rynku ----------
 function dzisHTML(x) {
@@ -280,9 +298,23 @@ function rysujListe() {
     .map((s, i) => ({ s, i }))   // i = pozycja w danych (potrzebna do okienka z wykresem)
     .filter(({ s }) => sektor === "Wszystkie" || s.sektor === sektor)
     .sort((a, b) => SORTOWANIA[sortowanie][1](a.s, b.s));
-  widoczne.forEach(({ s, i }) => {
-    const st = status(s.od_lokalnego);
-    const stAth = status(s.od_ath);
+  // Sekcje według grup (kolejność jak w PROGI_GRUP); w sekcji wybrane sortowanie.
+  DANE.grupy.forEach(g => {
+    const wGrupie = widoczne.filter(({ s }) => s.grupa === g.id);
+    if (!wGrupie.length) return;
+    const doUwagi = wGrupie.filter(({ s }) => s.przyjrzyj).length;
+    const naglowek = document.createElement("div");
+    naglowek.className = "sekcja";
+    naglowek.innerHTML = "<h2>" + esc(g.nazwa) + " <span>" + wGrupie.length + "</span></h2>" +
+      "<small>próg spadku " + g.prog + "% od szczytu " + DANE.dni + "d" +
+      (doUwagi ? ' · <b class="czerwony">' + doUwagi + " do przyjrzenia</b>" : "") + "</small>";
+    lista.appendChild(naglowek);
+    wGrupie.forEach(rysujKarte);
+  });
+}
+
+function rysujKarte({ s, i }) {
+    const st = status(s.od_lokalnego, s.grupa);
     const wypelnienie = Math.max(0, Math.min(100, (s.cena / s.szczyt) * 100));
     const karta = document.createElement("button");
     karta.className = "karta " + st;
@@ -292,6 +324,7 @@ function rysujListe() {
           '<div class="nazwa">' + esc(s.nazwa) + '<span class="ikona">📈</span></div>' +
           '<span class="ticker">' + esc(s.ticker) + "</span>" +
           (sektor === "Wszystkie" ? '<span class="sektor">' + esc(s.sektor) + "</span>" : "") +
+          (s.przyjrzyj ? '<div class="przyjrzyj">👀 przyjrzyj się</div>' : "") +
         "</div>" +
         '<div class="odznaka liczby"><b>' + procent(s.od_lokalnego) + "</b><small>od szczytu " + DANE.dni + "d</small></div>" +
       "</div>" +
@@ -300,12 +333,11 @@ function rysujListe() {
       '<div class="pasek" title="cena jako % szczytu ' + DANE.dni + 'd"><i style="width:' + wypelnienie + '%"></i></div>' +
       '<div class="szczyty liczby">' +
         "<div>Szczyt " + DANE.dni + "d<strong>" + kwota(s.szczyt) + " " + esc(s.waluta) + "</strong>" + s.data_szczytu + "</div>" +
-        '<div class="' + stAth + '">ATH <span class="procent">' + procent(s.od_ath) + "</span><strong>" +
+        "<div>ATH <b>" + procent(s.od_ath) + "</b><strong>" +
           kwota(s.ath) + " " + esc(s.waluta) + "</strong>" + s.data_ath + "</div>" +
       "</div>";
     karta.addEventListener("click", () => otworz(i));
     lista.appendChild(karta);
-  });
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-sort], [data-sektor]");
