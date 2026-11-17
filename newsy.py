@@ -80,7 +80,7 @@ PLIK_SZABLONU = Path(__file__).parent / "szablon_newsy.html"
 DEEPL_KLUCZ = os.environ.get("DEEPL_API_KEY", "").strip()
 # Najwyżej tyle znaków DeepL na jedno uruchomienie (darmowy plan: 500 000/mies., skrypt zostawia też 5% zapasu).
 # Same tytuły to ok. 1000 znaków na odświeżenie; wyższy limit pozwala szybko nadrobić zaległości.
-DEEPL_ZNAKOW_NA_URUCHOMIENIE = 4000
+DEEPL_ZNAKOW_NA_URUCHOMIENIE = 10000
 STATUS_TLUMACZENIA = ""   # krótki opis wyniku tłumaczenia — pokazywany w stopce strony
 # Zwykła przeglądarkowa nazwa klienta — niektóre portale odrzucają zapytania bez niej.
 NAGLOWKI = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) watchlista-rss"}
